@@ -91,10 +91,13 @@ jobs:
 
       - name: Validate environment
         run: |
-          case "${{ inputs.environment }}" in
-            dev|staging|prod) echo "✓ Environment valid: ${{ inputs.environment }}" ;;
-            *) echo "✗ Invalid environment: ${{ inputs.environment }}"; exit 1 ;;
-          esac
+          if [[ "${{ inputs.environment }}" =~ ^[a-z][a-z0-9-]{0,62}$ ]]; then
+            echo "✓ Environment valid: ${{ inputs.environment }}"
+          else
+            echo "✗ Invalid environment: ${{ inputs.environment }}"
+            echo "  Must be lowercase alphanumeric with hyphens, starting with a letter (max 63 chars)"
+            exit 1
+          fi
 
   # ── Main deployment job ────────────────────────────────────────────────────
   deploy:
