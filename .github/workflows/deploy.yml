@@ -74,6 +74,7 @@ on:
 env:
   TF_VERSION: ${{ inputs.terraform_version }}
   GO_VERSION: "1.25"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ── Validate action & environment ──────────────────────────────────────────
@@ -119,7 +120,7 @@ jobs:
     steps:
       # ── Checkout module repo ──────────────────────────────────────────────
       - name: Checkout module repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.module_version }}
           fetch-depth: 0  # Full history for version detection
@@ -148,14 +149,14 @@ jobs:
 
       # ── Setup providers & Terraform ────────────────────────────────────────
       - name: Checkout rest provider
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/terraform-provider-rest
           path: .providers/rest
           ref: main
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: false
@@ -164,7 +165,7 @@ jobs:
         run: .github/scripts/setup-providers.sh .providers/rest
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -234,7 +235,7 @@ jobs:
 
       # ── Azure Login (OIDC) ─────────────────────────────────────────────────
       - name: Azure Login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
