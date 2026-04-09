@@ -94,7 +94,8 @@ resource "rest_resource" "branch_protection" {
 - Check each resource's spec to determine if it uses POST or PUT for creation
 - For POST-created resources with server-assigned names/paths, use `$(body.<field>)` in read/update/delete paths
 - For PUT-created resources where the path is fully client-specified, read/update/delete paths match create path
-- **No polling needed** — GitHub REST operations are synchronous (unlike ARM async or Entra ID replication)
+- **Polling for POST-to-collection eventual consistency** — GitHub POST-create operations (e.g. repos) return 201 immediately, but the subsequent GET can 404 for several seconds due to backend replication. Use `poll_create` with `status_locator = "code"`, `success = "200"`, `pending = ["404"]` and `default_delay_sec = 5`. PUT-created resources (environments, branch protection) are synchronous and do not need polling.
+- **`check_existance` only works for PUT-to-resource** — POST-to-collection resources (repositories, teams) cannot use `check_existance` because the provider would GET the collection endpoint (which always returns 200), not the specific resource. Only PUT-created resources where the path addresses the specific resource can use it.
 - `output_attrs` should include the fields needed by `outputs.tf`
 
 ### Provider Configuration
@@ -251,7 +252,26 @@ terraform {
 - Build `body` from writable variables only — use GitHub's property naming (usually snake_case)
 - For POST-created resources, set `read_path`, `update_path`, `delete_path` using `$(body.<field>)` for the server-assigned identifier
 - For PUT-created resources, read/update/delete paths match the create path
-- No polling blocks needed — GitHub operations are synchronous
+- For POST-to-collection resources (repos, teams), add `poll_create` to handle eventual consistency:
+  ```hcl
+  poll_create = {
+    status_locator    = "code"
+    default_delay_sec = 5
+    status = {
+      success = "200"
+      pending = ["404"]
+    }
+  }
+  ```
+- For **secret** resources that require NaCl sealed-box encryption, use the `provider::rest::nacl_seal()` function with a `data.rest_resource` to fetch the public key:
+  ```hcl
+  data "rest_resource" "public_key" {
+    path = "/repos/${var.owner}/${var.repo}/actions/secrets/public-key"
+  }
+  locals {
+    encrypted = provider::rest::nacl_seal(var.plaintext_value, data.rest_resource.public_key.output.key)
+  }
+  ```
 - `output_attrs` with only fields needed by `outputs.tf`
 
 #### `outputs.tf`

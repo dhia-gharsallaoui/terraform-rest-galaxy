@@ -67,10 +67,16 @@ output "github_values" {
 
 locals {
   _github_values = { for k, v in {
-    github_runner_groups                 = module.github_runner_groups
-    github_hosted_runners                = module.github_hosted_runners
-    github_repository_action_variables   = module.github_repository_action_variables
-    github_repository_secrets            = module.github_repository_secrets
+    github_runner_groups               = module.github_runner_groups
+    github_hosted_runners              = module.github_hosted_runners
+    github_repositories                = module.github_repositories
+    github_repository_action_variables = module.github_repository_action_variables
+    github_repository_secrets          = module.github_repository_secrets
+    github_environments                = module.github_environments
+    github_environment_secrets         = module.github_environment_secrets
+    github_environment_variables       = module.github_environment_variables
+    github_organization_secrets        = module.github_organization_secrets
+    github_organization_variables      = module.github_organization_variables
   } : k => v if length(v) > 0 }
 }
 

@@ -97,6 +97,7 @@ For each module, read all files and compare against the rules defined in `.githu
 | **Name availability pre-check** | Globally unique resources (storage accounts, key vaults, CIAM directories, etc.) must include a `rest_operation.check_name_availability` that POSTs to the ARM `checkNameAvailability` endpoint **at plan time**, plus a `lifecycle.precondition` on the main resource that fails with a clear message when the name is taken. Use `azure-specs_read_spec` to find the correct endpoint. Skip for resources without a `checkNameAvailability` API. — see [Pattern #12](../../patterns/rest-provider-patterns.md#12-name-availability-pre-check-for-globally-unique-resources) |
 | **Resource provider registration check** | Every module must have a `data "rest_resource" "provider_check"` that GETs `/subscriptions/${var.subscription_id}/providers/<Namespace>?api-version=2025-04-01` with `output_attrs = toset(["registrationState"])`, and a `lifecycle { precondition }` on the main resource checking `registrationState == "Registered"`. The error message must show the YAML to add (`azure_resource_provider_registrations`), not a CLI command. See tf-module conventions. |
 | **Permission pre-check (`checkAccess`)** | For modules requiring elevated or uncommon permissions (billing, subscription, cross-tenant), verify a `rest_operation.check_access` with `var.precheck_access` opt-in and `check` blocks (advisory warnings) exist. See [Pattern #13](../../patterns/rest-provider-patterns.md#13-permission-pre-check-checkaccess-for-elevated-permission-resources). |
+| **Immutable properties (`force_new_attrs`)** | If the Azure spec marks properties as `x-ms-mutability: ["create", "read"]` (no `"update"`), or if an update returns 400 with `*UpdateNotPermitted`/`*CannotBeChanged`, verify the module has `force_new_attrs = toset([...])` listing those paths. Common: `properties.principalId` on role assignments, `properties.issuer`/`properties.subject` on FICs. See [Pattern #19](../../patterns/rest-provider-patterns.md#19-force_new_attrs--immutable-body-properties). |
 
 #### 2b. Root module wiring
 
@@ -184,6 +185,7 @@ For each gap identified, apply the fix following the conventions in the agent sp
    ```
    error_message = "Resource provider <Namespace> is not registered on subscription ${var.subscription_id}. Add to your config YAML:\n\n  azure_resource_provider_registrations:\n    <short_name>:\n      resource_provider_namespace: <Namespace>"
    ```
+11. **Missing `force_new_attrs`** → For immutable properties (spec `x-ms-mutability: ["create", "read"]` or 400 `*UpdateNotPermitted`), add `force_new_attrs = toset(["properties.<field>"])`. See [Pattern #19](../../patterns/rest-provider-patterns.md#19-force_new_attrs--immutable-body-properties).
 
 After each fix, run `terraform fmt -recursive` on affected directories.
 
@@ -263,6 +265,8 @@ These are recurring issues discovered during development of this repo:
 | `poll_delete` treats 404 as failure | `Error: Polling failure` during destroy after resource is successfully deleted | Change `poll_delete` to `success = "404"`, `pending = ["200", "202"]` — see [Pattern #15](../../patterns/rest-provider-patterns.md#15-arm-poll_delete--404-means-success) |
 | K8s namespace label drift | 3 namespaces show "will be updated" on every plan (removing `kubernetes.io/metadata.name` label) | Include auto-injected label in body: `merge({"kubernetes.io/metadata.name" = var.name}, var.labels)` — see [Pattern #16](../../patterns/rest-provider-patterns.md#16-kubernetes-server-side-mutations--preventing-body-drift) |
 | K8s destroy 403 `system:anonymous` | `ephemeral_header` not available during Delete — K8s resources can't authenticate for deletion | Switch to `header` (not `ephemeral_header`) + track token expiry to prevent drift — see [Pattern #14](../../patterns/rest-provider-patterns.md#14-ephemeral_header--not-available-during-delete) and [Pattern #17](../../patterns/rest-provider-patterns.md#17-token-expiry-tracking--preventing-auth-header-drift) |
+| Immutable property update rejected | `400 RoleAssignmentUpdateNotPermitted` or `400 *CannotBeChanged` on apply after a property value change | Add `force_new_attrs = toset(["properties.<field>"])` to the `rest_resource` block — see [Pattern #19](../../patterns/rest-provider-patterns.md#19-force_new_attrs--immutable-body-properties) |
+| Concurrent write 409 on apply | `409 Concurrent*` when creating multiple child resources on the same parent (e.g. FICs on a UAI) | Configure `client.retry` with 409 in `status_codes` on the provider block — see [Pattern #20](../../patterns/rest-provider-patterns.md#20-provider-level-retry-for-transient-errors) |
 
 ## Constraints
 

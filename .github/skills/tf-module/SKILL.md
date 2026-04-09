@@ -414,3 +414,57 @@ The agent will:
 | Output name | `output "values"` | `output "entraid_values"` |
 | Layer context | `_ctx_l0`, `_ctx_l0b`, `_ctx_l1` … | `_entraid_ctx_l0`, `_entraid_ctx_l1` … |
 | Layer resolution base | Applications resolve against `_ctx_l0b` (Azure base) | L1 Entra ID resources resolve against `_entraid_ctx_l0` |
+
+---
+
+### Mode D — GitHub REST API resource module
+
+For resources backed by the **GitHub REST API** (repositories, environments, secrets, variables, teams), invoke the **GitHub Rest Module Generator** agent:
+
+```
+@GitHub Rest Module Generator <resource type>
+```
+
+Examples:
+```
+@GitHub Rest Module Generator Repository
+@GitHub Rest Module Generator Environment
+@GitHub Rest Module Generator Organization Secret
+```
+
+The agent will:
+1. Locate the GitHub REST API spec via `github-specs` MCP tools
+2. Parse the POST/PUT/PATCH/GET/DELETE paths and writable/read-only properties
+3. Generate `modules/github/<resource_name>/` (versions.tf, variables.tf, main.tf, outputs.tf, README.md)
+4. Update the root module — add `github_<plural_resource_name>.tf` and append to `github_outputs.tf`
+5. Generate `examples/github/<resource_name>/minimum/` and `examples/github/<resource_name>/complete/`
+6. Generate tests:
+   - `tests/unit_github_<resource_name>.tftest.hcl` — sub-module isolation (plan only, own provider block)
+   - `tests/integration_github_<resource_name>.tftest.hcl` — root module test (no provider block)
+7. Run `terraform fmt` and `terraform validate`
+
+#### Key differences from Azure ARM (Mode A)
+
+| Aspect | Azure ARM (Mode A) | GitHub REST (Mode D) |
+|---|---|---|
+| API | Azure Resource Manager | GitHub REST API v3 |
+| Provider alias | `rest` (default) | `rest.github` (declared in `azure_provider.tf`) |
+| Base URL | `https://management.azure.com` | `https://api.github.com` |
+| Create method | PUT (idempotent) | POST (collection) or PUT (resource) — depends on endpoint |
+| Auth | Bearer token / OAuth2 refresh | `Bearer ${var.github_token}` + `X-GitHub-Api-Version` header |
+| Polling | `poll_create`/`poll_delete` for async LRO | `poll_create` with `status_locator = "code"` for POST-to-collection eventual consistency |
+| `check_existance` | Used for PUT-scoped resources | Only for PUT-created resources (environments, branch protection); NOT for POST-to-collection (repos, teams) |
+| Secrets encryption | N/A | `provider::rest::nacl_seal()` with org/repo public key |
+| Root file prefix | `azure_` | `github_` |
+| Module directory | `modules/azure/` | `modules/github/` |
+| Layer system | L0–LN based on ARM dependency chain | L4 = repos/org secrets/org variables, L5 = environments/repo secrets/repo variables |
+| Output name | `output "azure_values"` | `output "github_values"` |
+
+#### GitHub-specific patterns
+
+- **POST-to-collection eventual consistency** — GitHub POST-create operations (repos, teams) return 201 immediately, but GET can 404 for several seconds. Use `poll_create` with `status_locator = "code"`, `success = "200"`, `pending = ["404"]`.
+- **`check_existance` limitation** — POST-to-collection resources cannot use `check_existance` because the provider would GET the collection (always 200), not the individual resource.
+- **NaCl sealed-box encryption** — GitHub secrets must be encrypted with the repo/org public key using `provider::rest::nacl_seal(key, plaintext)`.
+- **`X-GitHub-Api-Version` header** — Required on all requests; set via `header` in the provider or module.
+
+See full details in [`.github/agents/github-rest-module.agent.md`](../../agents/github-rest-module.agent.md).

@@ -32,15 +32,22 @@ locals {
 }
 
 resource "rest_resource" "role_assignment" {
-  path            = local.ra_path
-  create_method   = "PUT"
-  check_existance = var.check_existance
+  path             = local.ra_path
+  create_method    = "PUT"
+  check_existance  = var.check_existance
+  ephemeral_header = var.header
 
   query = {
     api-version = [local.api_version]
   }
 
   body = local.body
+
+  # principalId is immutable — Azure rejects updates with 400
+  # RoleAssignmentUpdateNotPermitted. Force destroy+create on change.
+  force_new_attrs = toset([
+    "properties.principalId",
+  ])
 
   output_attrs = toset([
     "name",
