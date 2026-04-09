@@ -29,7 +29,7 @@ variable "github_repository_secrets" {
 
 locals {
   github_repository_secrets = provider::rest::resolve_map(
-    local._ctx_l3,
+    local._ctx_l4,
     merge(try(local._yaml_raw.github_repository_secrets, {}), var.github_repository_secrets)
   )
 }
@@ -42,7 +42,14 @@ module "github_repository_secrets" {
     rest = rest.github
   }
 
-  depends_on = [module.azure_user_assigned_identities]
+  # The data.rest_resource.public_key inside this module fetches the
+  # repository's NaCl public key. That endpoint only returns 200 once the
+  # repository itself exists, so we must defer the refresh until after
+  # github_repositories has been applied.
+  depends_on = [
+    module.azure_user_assigned_identities,
+    module.github_repositories,
+  ]
 
   owner           = each.value.owner
   repo            = each.value.repo

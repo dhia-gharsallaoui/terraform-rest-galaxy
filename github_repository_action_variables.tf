@@ -29,7 +29,7 @@ variable "github_repository_action_variables" {
 
 locals {
   github_repository_action_variables = provider::rest::resolve_map(
-    local._ctx_l3,
+    local._ctx_l4,
     merge(try(local._yaml_raw.github_repository_action_variables, {}), var.github_repository_action_variables)
   )
 }
@@ -42,7 +42,12 @@ module "github_repository_action_variables" {
     rest = rest.github
   }
 
-  depends_on = [module.azure_user_assigned_identities]
+  # Repo variables require the repository to exist before POST, so we
+  # depend on github_repositories in addition to the baseline.
+  depends_on = [
+    module.azure_user_assigned_identities,
+    module.github_repositories,
+  ]
 
   owner = each.value.owner
   repo  = each.value.repo
