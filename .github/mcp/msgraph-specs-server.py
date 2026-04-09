@@ -16,7 +16,7 @@ cached in memory.  Path indexing is built once per version.
 
 Environment:
   MSGRAPH_SPECS_ROOT  — path to the msgraph-metadata repo root
-                        (default: /Users/laurentlesle/git/github.com/microsoftgraph/msgraph-metadata)
+                        (default: specs/msgraph-metadata, relative to repo root)
 """
 
 import sys
@@ -47,9 +47,18 @@ def _log(msg: str) -> None:
 REPO_ROOT = Path(
     os.environ.get(
         "MSGRAPH_SPECS_ROOT",
-        "/Users/laurentlesle/git/github.com/microsoftgraph/msgraph-metadata",
+        "specs/msgraph-metadata",
     )
 )
+
+# ── Keep the backing submodule fresh on startup ───────────────────────────────
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from _spec_updater import ensure_latest
+
+    ensure_latest(REPO_ROOT, log=_log)
+except Exception as _exc:  # pragma: no cover - defensive
+    _log(f"spec auto-update skipped: {_exc!r}")
 
 # ── MCP JSON-RPC transport ────────────────────────────────────────────────────
 

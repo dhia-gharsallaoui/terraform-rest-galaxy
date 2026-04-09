@@ -3,15 +3,15 @@
 ## Architecture
 
 - **Provider**: `LaurentLesle/rest ~> 1.0` — REST-first, no `azurerm`/`azapi`/`hashicorp/kubernetes`
-- **Custom providers**: `rest` (REST API, ref-resolution, K8s token, externals validation) — source in `../terraform-provider-rest/`
+- **Custom providers**: `rest` (REST API, ref-resolution, K8s token, externals validation) — source vendored as a shallow submodule at `providers/terraform-provider-rest/`
 - **Module domains**: `modules/azure/`, `modules/entraid/`, `modules/github/`, `modules/k8s/`
 - **Config-driven**: YAML files in `configurations/` define infrastructure via `ref:` cross-references
 - **State backend**: `azurerm` in storage account `stdplstate001`
 
 ## Key Files
 
-- `../terraform-provider-rest/internal/resources/k8s_token.go` — K8s ServiceAccount + bearer token resource with expiry tracking
-- `../terraform-provider-rest/internal/functions/validate_externals.go` — externals validation with two-pass flattenJSONResponse
+- `providers/terraform-provider-rest/internal/resources/k8s_token.go` — K8s ServiceAccount + bearer token resource with expiry tracking
+- `providers/terraform-provider-rest/internal/functions/validate_externals.go` — externals validation with two-pass flattenJSONResponse
 - `modules/k8s/namespace/main.tf` — includes `kubernetes.io/metadata.name` auto-injected label
 - `modules/azure/container_registry/main.tf` — `poll_delete` treats 404 as success
 
@@ -26,8 +26,8 @@
 
 ## Build & Test
 
-- Build custom provider: `cd ../terraform-provider-rest && go build -o ~/.terraform.d/plugins/registry.terraform.io/LaurentLesle/rest/1.0.0/darwin_arm64/terraform-provider-rest_v1.0.0 .`
-- Install to mirror: copy to `~/.terraform.d/plugins/registry.terraform.io/LaurentLesle/rest/<version>/<os_arch>/`
+- Build custom provider: `.github/scripts/setup-providers.sh` (defaults to `providers/terraform-provider-rest`, builds via Go, installs into the local plugin mirror, writes `~/.terraformrc`)
+- Install to mirror manually: `cd providers/terraform-provider-rest && go build -o ~/.terraform.d/plugins/registry.terraform.io/LaurentLesle/rest/<version>/<os_arch>/terraform-provider-rest_v<version> .`
 - Update lock: delete `.terraform.lock.hcl` → `terraform init -backend=false`
 - Run tests: `terraform test` from repo root
 - Full lifecycle: `./tf.sh apply <config.yaml>` / `./tf.sh destroy <config.yaml>`

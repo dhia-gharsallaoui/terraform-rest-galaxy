@@ -1,0 +1,21 @@
+[submodule "specs/azure-rest-api-specs"]
+	path = specs/azure-rest-api-specs
+	url = https://github.com/Azure/azure-rest-api-specs.git
+	shallow = true
+[submodule "specs/msgraph-metadata"]
+	path = specs/msgraph-metadata
+	url = https://github.com/microsoftgraph/msgraph-metadata.git
+	shallow = true
+[submodule "specs/rest-api-description"]
+	path = specs/rest-api-description
+	url = https://github.com/github/rest-api-description.git
+	shallow = true
+[submodule "specs/kubernetes"]
+	path = specs/kubernetes
+	url = https://github.com/kubernetes/kubernetes.git
+	shallow = true
+[submodule "providers/terraform-provider-rest"]
+	path = providers/terraform-provider-rest
+	url = https://github.com/LaurentLesle/terraform-provider-rest.git
+	shallow = true
+
