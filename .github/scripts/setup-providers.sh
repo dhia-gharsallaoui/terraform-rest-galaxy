@@ -10,7 +10,7 @@
 #   3. Writes a .terraformrc that uses dev_overrides for local builds + direct for everything else
 set -euo pipefail
 
-REST_SRC="${1:-../terraform-provider-rest}"
+REST_SRC="${1:-providers/terraform-provider-rest}"
 PROVIDER_VERSION="1.0.0"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
