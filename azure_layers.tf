@@ -127,9 +127,26 @@ locals {
     # azure_private_endpoints and azure_postgresql_flexible_servers resolve at L3 but are terminal (nothing refs their outputs)
   })
 
-  # ── Layer 4: + GitHub runner groups (depend on github_network_settings from L3)
+  # ── Layer 4: + Tier-A GitHub resources
+  #    - github_runner_groups          depend on L3 github_network_settings
+  #    - github_repositories           depend only on externals (resolved at L3)
+  #    - github_organization_secrets   depend only on externals
+  #    - github_organization_variables depend only on externals
   _ctx_l4 = merge(local._ctx_l3, {
-    github_runner_groups = local._ghrg_ctx
-    # github_hosted_runners resolve at L4 but are terminal (nothing refs their outputs)
+    github_repositories           = local._ghrepo_ctx
+    github_organization_secrets   = local._ghorgsec_ctx
+    github_organization_variables = local._ghorgvar_ctx
+    github_runner_groups          = local._ghrg_ctx
+    # github_repository_secrets, github_repository_action_variables, and
+    # github_hosted_runners all resolve at L4 but are terminal
+    # (nothing refs their outputs).
+  })
+
+  # ── Layer 5: + Tier-B GitHub resources
+  #    - github_environments depend on github_repositories (L4) for owner/repo refs
+  #    github_environment_secrets and github_environment_variables resolve at L5
+  #    but are terminal.
+  _ctx_l5 = merge(local._ctx_l4, {
+    github_environments = local._ghenv_ctx
   })
 }

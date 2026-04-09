@@ -10,6 +10,7 @@
 #   apply     init + terraform apply (+ state upload for bootstrap)
 #   destroy   init + terraform destroy
 #   output    init + terraform output
+#   vars      List variables needed for a config (--resolve to show values)
 #   status    Show all terraform_backend sections across configs
 #
 # Examples:
@@ -705,6 +706,175 @@ if ut:
   ok "Local backup: ${state_path}.bak"
 }
 
+# ── Variable metadata ────────────────────────────────────────────────────────
+# Single source of truth for which TF_VAR_* each provider need requires.
+# Output lines: category|var_name|description
+#   auto     = tf.sh acquires automatically
+#   optional = tf.sh acquires when available (non-fatal if missing)
+#   manual   = user must set before running
+_var_metadata() {
+  local needs="$1" config_file="$2"
+  if [[ "$needs" == *arm* ]]; then
+    echo "auto|TF_VAR_azure_access_token|ARM bearer token"
+    echo "auto|TF_VAR_subscription_id|Azure subscription ID"
+    echo "auto|TF_VAR_caller_object_id|Caller object ID"
+    echo "optional|TF_VAR_azure_refresh_token|MSAL refresh token (auto-renewal)"
+    echo "optional|TF_VAR_azure_token_url|OAuth2 token endpoint"
+  fi
+  if [[ "$needs" == *graph* ]]; then
+    echo "auto|TF_VAR_graph_access_token|Graph bearer token"
+    echo "optional|TF_VAR_graph_refresh_token|MSAL refresh token (auto-renewal)"
+    echo "optional|TF_VAR_graph_token_url|OAuth2 token endpoint"
+  fi
+  if [[ "$needs" == *k8s* ]]; then
+    echo "auto|TF_VAR_docker_available|Docker running check"
+    echo "auto|TF_VAR_k8s_cluster_credentials|Kind cluster credentials"
+    echo "auto|TF_VAR_k8s_aks_cluster_credentials|AKS cluster credentials"
+  fi
+  if [[ "$needs" == *github* ]]; then
+    echo "manual|TF_VAR_github_token|GitHub PAT or App token"
+  fi
+  # Cross-tenant externals require manually-provided tokens
+  if [[ -n "$config_file" ]]; then
+    local cross
+    cross="$(python3 -c "
+import yaml, sys
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f)
+for cat in cfg.get('externals', {}).values():
+    if isinstance(cat, dict):
+        for e in cat.values():
+            if isinstance(e, dict) and '_tenant' in e:
+                print('yes'); sys.exit(0)
+print('no')
+" "$config_file")"
+    if [[ "$cross" == "yes" ]]; then
+      echo "manual|TF_VAR_arm_tenant_tokens|Cross-tenant ARM bearer tokens"
+    fi
+  fi
+}
+
+# ── Mask sensitive values for display ────────────────────────────────────────
+_mask_value() {
+  local var_name="$1" value="$2"
+  if [[ -z "$value" ]]; then
+    echo "(not set)"
+    return
+  fi
+  case "$var_name" in
+    *_access_token|*_refresh_token|*_token|*_tokens|*_credentials)
+      if [[ ${#value} -gt 16 ]]; then
+        echo "${value:0:8}...${value: -4} (${#value} chars)"
+      else
+        echo "***masked*** (${#value} chars)"
+      fi
+      ;;
+    *)
+      echo "$value"
+      ;;
+  esac
+}
+
+# ── Display a group of var metadata lines ────────────────────────────────────
+# Reads lines from stdin: category|var_name|description
+_display_var_lines() {
+  local resolve="$1"
+  while IFS='|' read -r _ var desc; do
+    if [[ "$resolve" == "true" ]]; then
+      printf "  %-40s = %s\n" "$var" "$(_mask_value "$var" "${!var:-}")"
+    else
+      printf "  %-40s %s\n" "$var" "($desc)"
+    fi
+  done
+}
+
+# ── Vars: list variables needed for a config ─────────────────────────────────
+do_vars() {
+  local config_file="$1" resolve="${2:-false}"
+  local config_rel="${config_file#$REPO_ROOT/}"
+
+  local backend_json
+  backend_json="$(parse_backend "$config_file")"
+
+  local needs
+  needs="$(detect_token_needs "$config_file")"
+
+  # In resolve mode, actually acquire tokens so we can show values
+  if [[ "$resolve" == "true" ]]; then
+    acquire_tokens "$needs" "$config_file"
+    local ci_mode="${TF_CI_MODE:-false}"
+    if [[ "$needs" == *k8s* && "$ci_mode" != "true" ]]; then
+      extract_k8s_credentials "$config_file" || true
+      extract_aks_credentials "$config_file" || true
+    fi
+    echo ""
+  fi
+
+  echo -e "${BLUE}Variables for:${NC} $config_rel"
+  echo ""
+
+  # ── -var flags ──
+  echo -e "${GREEN}-var flags (passed automatically):${NC}"
+  echo "  -var config_file=$config_rel"
+  if [[ "$backend_json" != "null" ]]; then
+    local backend_type
+    backend_type="$(json_field "$backend_json" type)"
+    if [[ "$backend_type" == "azurerm" ]]; then
+      local remote_keys
+      remote_keys="$(json_remote_states "$backend_json")"
+      if [[ -n "$remote_keys" ]]; then
+        echo "  -var remote_state_backend={...}  (from terraform_backend)"
+        echo "  -var remote_state_keys=$remote_keys"
+      fi
+    fi
+  fi
+  echo ""
+
+  # ── TF_VAR_* env vars grouped by category ──
+  local metadata
+  metadata="$(_var_metadata "$needs" "$config_file")"
+
+  if [[ -z "$metadata" ]]; then
+    echo -e "${GREEN}No TF_VAR_* environment variables needed.${NC}"
+    echo ""
+  else
+    local lines
+
+    lines="$(echo "$metadata" | grep "^auto|" || true)"
+    if [[ -n "$lines" ]]; then
+      echo -e "${GREEN}Auto-acquired by tf.sh:${NC}"
+      echo "$lines" | _display_var_lines "$resolve"
+      echo ""
+    fi
+
+    lines="$(echo "$metadata" | grep "^optional|" || true)"
+    if [[ -n "$lines" ]]; then
+      echo -e "${BLUE}Optional (acquired when available):${NC}"
+      echo "$lines" | _display_var_lines "$resolve"
+      echo ""
+    fi
+
+    lines="$(echo "$metadata" | grep "^manual|" || true)"
+    if [[ -n "$lines" ]]; then
+      echo -e "${YELLOW}Must be set manually:${NC}"
+      echo "$lines" | _display_var_lines "$resolve"
+      echo ""
+    fi
+  fi
+
+  # ── Resource maps from config ──
+  echo -e "${BLUE}Resource maps in config (YAML → TF variable):${NC}"
+  python3 -c "
+import yaml, sys
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f)
+for key in sorted(cfg):
+    if key != 'terraform_backend':
+        print(f'  {key}')
+" "$config_file"
+  echo ""
+}
+
 # ── Status: show all terraform_backend sections ─────────────────────────────
 do_status() {
   info "Scanning configurations for terraform_backend sections..."
@@ -744,6 +914,24 @@ main() {
     exit 0
   fi
 
+  if [[ "$action" == "vars" ]]; then
+    local resolve=false cf=""
+    shift # past "vars"
+    for arg in "$@"; do
+      case "$arg" in
+        --resolve) resolve=true ;;
+        *) [[ -z "$cf" ]] && cf="$arg" ;;
+      esac
+    done
+    [[ -n "$cf" ]] || die "Usage: ./tf.sh vars [--resolve] <config_file>"
+    if [[ ! "$cf" = /* ]]; then
+      cf="$REPO_ROOT/$cf"
+    fi
+    [[ -f "$cf" ]] || die "Config file not found: $cf"
+    do_vars "$cf" "$resolve"
+    exit 0
+  fi
+
   if [[ -z "$action" || -z "$config_file" ]]; then
     cat << 'USAGE'
 Usage: ./tf.sh <action> <config_file>
@@ -756,11 +944,14 @@ Actions:
   output         init + terraform output
   force-unlock   Break the state lock (azurerm: blob lease break)
   import         Import an existing resource into state
+  vars           List variables needed for a config (--resolve to show values)
   status         Show all terraform_backend sections
 
 Examples:
   ./tf.sh plan configurations/00-bootstrap/config.yaml
   ./tf.sh apply configurations/01-launchpad/config.yaml
+  ./tf.sh vars configurations/01-launchpad/config.yaml
+  ./tf.sh vars --resolve configurations/01-launchpad/config.yaml
   ./tf.sh status
 USAGE
     exit 1
@@ -879,7 +1070,7 @@ USAGE
       terraform -chdir="$REPO_ROOT" import $var_flags "${extra_args[@]+"${extra_args[@]}"}"
       ;;
     *)
-      die "Unknown action: $action (expected: init|plan|apply|destroy|output|force-unlock|import|status)"
+      die "Unknown action: $action (expected: init|plan|apply|destroy|output|force-unlock|import|vars|status)"
       ;;
   esac
 }

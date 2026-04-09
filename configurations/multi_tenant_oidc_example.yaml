@@ -1,0 +1,1141 @@
+# Contoso Platform — Multi-Tenant GitHub + Azure OIDC Infrastructure
+#
+# This configuration deploys the Contoso platform across 4 Azure AD tenants:
+#
+#   Global  (aaaa...0001) — automation hub, global resources (VPN, IPAM)
+#   Dev     (aaaa...0002) — development environment
+#   Prod    (aaaa...0003) — production environment
+#   GDPR    (aaaa...0004) — GDPR-compliant workloads
+#
+# GitHub structure:
+#   - Platform-Global repo         → branch-based OIDC (main + PR), repo-level vars
+#   - Platform-{Networking,Security,Identity,Management} repos
+#       → 3 environments each (dev, prod, gdpr) with per-env OIDC + env vars
+#
+# Each tenant × domain gets: subscription + RG + UAI + Owner role + FIC
+#
+# Prerequisites:
+#   export TF_VAR_azure_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_github_token=$(gh auth token)
+#   export TF_VAR_arm_tenant_tokens='{
+#     "aaaaaaaa-1111-2222-3333-000000000001": "'$(az account get-access-token --resource https://management.azure.com --tenant contoso-global.onmicrosoft.com --query accessToken -o tsv)'",
+#     "aaaaaaaa-1111-2222-3333-000000000002": "'$(az account get-access-token --resource https://management.azure.com --tenant contoso-dev.onmicrosoft.com --query accessToken -o tsv)'",
+#     "aaaaaaaa-1111-2222-3333-000000000003": "'$(az account get-access-token --resource https://management.azure.com --tenant contoso-prod.onmicrosoft.com --query accessToken -o tsv)'",
+#     "aaaaaaaa-1111-2222-3333-000000000004": "'$(az account get-access-token --resource https://management.azure.com --tenant contoso-gdpr.onmicrosoft.com --query accessToken -o tsv)'"
+#   }'
+
+default_location: swedencentral
+
+# ── External references ─────────────────────────────────────────────────────
+externals:
+  github_organizations:
+    contoso:
+      org_name: "Contoso-Org"
+      business_id: 274778489
+
+  azure_tenants:
+    contoso_global:
+      tenant_id: "aaaaaaaa-1111-2222-3333-000000000001"
+    contoso_dev:
+      tenant_id: "aaaaaaaa-1111-2222-3333-000000000002"
+    contoso_prod:
+      tenant_id: "aaaaaaaa-1111-2222-3333-000000000003"
+    contoso_gdpr:
+      tenant_id: "aaaaaaaa-1111-2222-3333-000000000004"
+
+  # NOTE: No _tenant on billing externals — the Billing API uses the default
+  # access_token (home tenant identity which holds billing account owner role).
+  azure_billing_accounts:
+    contoso_billing:
+      billing_account_name: "00000000-0000-0000-0000-000000000000:11111111-1111-1111-1111-111111111111_2019-05-31"
+
+  azure_billing_scopes:
+    contoso_invoice_section:
+      billing_scope_id: "/providers/Microsoft.Billing/billingAccounts/00000000-0000-0000-0000-000000000000:11111111-1111-1111-1111-111111111111_2019-05-31/billingProfiles/S7D7-MVDN-BG7-PGB/invoiceSections/22222222-2222-2222-2222-222222222222"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Billing Tenant Associations
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_billing_associated_tenants:
+  contoso_dev:
+    billing_account_name: ref:externals.azure_billing_accounts.contoso_billing.billing_account_name
+    tenant_id:            ref:externals.azure_tenants.contoso_dev.tenant_id
+    display_name:         "Contoso Platform Dev"
+    billing_management_state:      Active
+    provisioning_management_state: Pending
+
+  contoso_prod:
+    billing_account_name: ref:externals.azure_billing_accounts.contoso_billing.billing_account_name
+    tenant_id:            ref:externals.azure_tenants.contoso_prod.tenant_id
+    display_name:         "Contoso Platform"
+    billing_management_state:      Active
+    provisioning_management_state: Pending
+
+  contoso_gdpr:
+    billing_account_name: ref:externals.azure_billing_accounts.contoso_billing.billing_account_name
+    tenant_id:            ref:externals.azure_tenants.contoso_gdpr.tenant_id
+    display_name:         "Contoso Platform GDPR"
+    billing_management_state:      Active
+    provisioning_management_state: Pending
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GitHub Repositories (5)
+# ══════════════════════════════════════════════════════════════════════════════
+
+github_repositories:
+  platform_global:
+    organization:          ref:externals.github_organizations.contoso.org_name
+    name:                  Platform-Global
+    description:           "Contoso global automation hub (managed by terraform-rest-galaxy)"
+    visibility:            private
+    auto_init:             true
+    gitignore_template:    Terraform
+    license_template:      mit
+    default_branch:        main
+    has_issues:            true
+    delete_branch_on_merge: true
+
+  platform_networking:
+    organization:          ref:externals.github_organizations.contoso.org_name
+    name:                  Platform-Networking
+    description:           "Contoso platform networking (managed by terraform-rest-galaxy)"
+    visibility:            private
+    auto_init:             true
+    gitignore_template:    Terraform
+    license_template:      mit
+    default_branch:        main
+    has_issues:            true
+    delete_branch_on_merge: true
+
+  platform_security:
+    organization:          ref:externals.github_organizations.contoso.org_name
+    name:                  Platform-Security
+    description:           "Contoso platform security (managed by terraform-rest-galaxy)"
+    visibility:            private
+    auto_init:             true
+    gitignore_template:    Terraform
+    license_template:      mit
+    default_branch:        main
+    has_issues:            true
+    delete_branch_on_merge: true
+
+  platform_identity:
+    organization:          ref:externals.github_organizations.contoso.org_name
+    name:                  Platform-Identity
+    description:           "Contoso platform identity (managed by terraform-rest-galaxy)"
+    visibility:            private
+    auto_init:             true
+    gitignore_template:    Terraform
+    license_template:      mit
+    default_branch:        main
+    has_issues:            true
+    delete_branch_on_merge: true
+
+  platform_management:
+    organization:          ref:externals.github_organizations.contoso.org_name
+    name:                  Platform-Management
+    description:           "Contoso platform management (managed by terraform-rest-galaxy)"
+    visibility:            private
+    auto_init:             true
+    gitignore_template:    Terraform
+    license_template:      mit
+    default_branch:        main
+    has_issues:            true
+    delete_branch_on_merge: true
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GitHub Environments (12 = 4 domain repos × 3 tenants)
+# ══════════════════════════════════════════════════════════════════════════════
+
+github_environments:
+  # ── Platform-Networking ──
+  networking_dev:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    name:  dev
+  networking_prod:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    name:  prod
+  networking_gdpr:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    name:  gdpr
+
+  # ── Platform-Security ──
+  security_dev:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    name:  dev
+  security_prod:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    name:  prod
+  security_gdpr:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    name:  gdpr
+
+  # ── Platform-Identity ──
+  identity_dev:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    name:  dev
+  identity_prod:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    name:  prod
+  identity_gdpr:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    name:  gdpr
+
+  # ── Platform-Management ──
+  management_dev:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    name:  dev
+  management_prod:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    name:  prod
+  management_gdpr:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    name:  gdpr
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GitHub Environment Variables (36 = 12 envs × 3 vars)
+# ══════════════════════════════════════════════════════════════════════════════
+
+github_environment_variables:
+  # ── Networking / dev ──
+  networking_dev_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_dev.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.dev_networking.subscription_id
+  networking_dev_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_dev.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.dev_networking.tenant_id
+  networking_dev_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_dev.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.dev_networking.client_id
+
+  # ── Networking / prod ──
+  networking_prod_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_prod.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.prod_networking.subscription_id
+  networking_prod_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_prod.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.prod_networking.tenant_id
+  networking_prod_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_prod.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.prod_networking.client_id
+
+  # ── Networking / gdpr ──
+  networking_gdpr_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_gdpr.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.gdpr_networking.subscription_id
+  networking_gdpr_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_gdpr.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.gdpr_networking.tenant_id
+  networking_gdpr_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_networking.name
+    environment_name: ref:github_environments.networking_gdpr.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.gdpr_networking.client_id
+
+  # ── Security / dev ──
+  security_dev_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_dev.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.dev_security.subscription_id
+  security_dev_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_dev.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.dev_security.tenant_id
+  security_dev_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_dev.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.dev_security.client_id
+
+  # ── Security / prod ──
+  security_prod_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_prod.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.prod_security.subscription_id
+  security_prod_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_prod.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.prod_security.tenant_id
+  security_prod_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_prod.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.prod_security.client_id
+
+  # ── Security / gdpr ──
+  security_gdpr_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_gdpr.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.gdpr_security.subscription_id
+  security_gdpr_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_gdpr.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.gdpr_security.tenant_id
+  security_gdpr_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_security.name
+    environment_name: ref:github_environments.security_gdpr.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.gdpr_security.client_id
+
+  # ── Identity / dev ──
+  identity_dev_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_dev.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.dev_identity.subscription_id
+  identity_dev_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_dev.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.dev_identity.tenant_id
+  identity_dev_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_dev.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.dev_identity.client_id
+
+  # ── Identity / prod ──
+  identity_prod_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_prod.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.prod_identity.subscription_id
+  identity_prod_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_prod.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.prod_identity.tenant_id
+  identity_prod_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_prod.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.prod_identity.client_id
+
+  # ── Identity / gdpr ──
+  identity_gdpr_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_gdpr.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.gdpr_identity.subscription_id
+  identity_gdpr_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_gdpr.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.gdpr_identity.tenant_id
+  identity_gdpr_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_identity.name
+    environment_name: ref:github_environments.identity_gdpr.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.gdpr_identity.client_id
+
+  # ── Management / dev ──
+  management_dev_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_dev.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.dev_management.subscription_id
+  management_dev_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_dev.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.dev_management.tenant_id
+  management_dev_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_dev.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.dev_management.client_id
+
+  # ── Management / prod ──
+  management_prod_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_prod.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.prod_management.subscription_id
+  management_prod_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_prod.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.prod_management.tenant_id
+  management_prod_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_prod.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.prod_management.client_id
+
+  # ── Management / gdpr ──
+  management_gdpr_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_gdpr.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.gdpr_management.subscription_id
+  management_gdpr_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_gdpr.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.gdpr_management.tenant_id
+  management_gdpr_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_management.name
+    environment_name: ref:github_environments.management_gdpr.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.gdpr_management.client_id
+
+# ── Repo-level variables for Platform-Global (3) ────────────────────────────
+github_repository_action_variables:
+  global_subscription_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_global.name
+    name:  TF_VAR_SUBSCRIPTION_ID
+    value: ref:azure_subscriptions.global_networking.subscription_id
+  global_tenant_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_global.name
+    name:  TF_VAR_TENANT_ID
+    value: ref:azure_user_assigned_identities.global_networking.tenant_id
+  global_client_id:
+    owner: ref:externals.github_organizations.contoso.org_name
+    repo:  ref:github_repositories.platform_global.name
+    name:  TF_VAR_CLIENT_ID
+    value: ref:azure_user_assigned_identities.global_networking.client_id
+
+# ── Organization-level secrets ──────────────────────────────────────────────
+github_organization_secrets:
+  contoso_shared_npm_token:
+    organization:    ref:externals.github_organizations.contoso.org_name
+    secret_name:     NPM_TOKEN
+    plaintext_value: "placeholder"
+    visibility:      all
+
+# ── Organization-level variables ────────────────────────────────────────────
+github_organization_variables:
+  contoso_default_region:
+    organization: ref:externals.github_organizations.contoso.org_name
+    name:         DEFAULT_REGION
+    value:        us-east-1
+    visibility:   all
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Azure Subscriptions (16 = 4 tenants × 4 domains)
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_subscriptions:
+  # ── Global tenant ──
+  # NOTE: No _tenant on subscriptions — the Subscription Aliases API is a
+  # global endpoint and must use the default access_token (home tenant identity
+  # which holds the billing subscription creator role).
+  global_networking:
+    display_name:          "Contoso-Global-Networking"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_security:
+    display_name:          "Contoso-Global-Security"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_identity:
+    display_name:          "Contoso-Global-Identity"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_management:
+    display_name:          "Contoso-Global-Management"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_global.tenant_id
+
+  # ── Dev tenant ──
+  dev_networking:
+    display_name:          "Contoso-Dev-Networking"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              DevTest
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_security:
+    display_name:          "Contoso-Dev-Security"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              DevTest
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_identity:
+    display_name:          "Contoso-Dev-Identity"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              DevTest
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_management:
+    display_name:          "Contoso-Dev-Management"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              DevTest
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_dev.tenant_id
+
+  # ── Prod tenant ──
+  prod_networking:
+    display_name:          "Contoso-Prod-Networking"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_security:
+    display_name:          "Contoso-Prod-Security"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_identity:
+    display_name:          "Contoso-Prod-Identity"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_management:
+    display_name:          "Contoso-Prod-Management"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_prod.tenant_id
+
+  # ── GDPR tenant ──
+  gdpr_networking:
+    display_name:          "Contoso-GDPR-Networking"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_security:
+    display_name:          "Contoso-GDPR-Security"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_identity:
+    display_name:          "Contoso-GDPR-Identity"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_management:
+    display_name:          "Contoso-GDPR-Management"
+    billing_scope:         ref:externals.azure_billing_scopes.contoso_invoice_section.billing_scope_id
+    workload:              Production
+    subscription_tenant_id: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Resource Provider Registrations (4 — ManagedIdentity on each identity sub)
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_resource_provider_registrations:
+  global_managed_identity:
+    subscription_id:             ref:azure_subscriptions.global_identity.subscription_id
+    resource_provider_namespace: Microsoft.ManagedIdentity
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  dev_managed_identity:
+    subscription_id:             ref:azure_subscriptions.dev_identity.subscription_id
+    resource_provider_namespace: Microsoft.ManagedIdentity
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  prod_managed_identity:
+    subscription_id:             ref:azure_subscriptions.prod_identity.subscription_id
+    resource_provider_namespace: Microsoft.ManagedIdentity
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  gdpr_managed_identity:
+    subscription_id:             ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_provider_namespace: Microsoft.ManagedIdentity
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Resource Groups (16 = 4 tenants × 4 domains)
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_resource_groups:
+  # ── Global ──
+  global_networking:
+    subscription_id:     ref:azure_subscriptions.global_networking.subscription_id
+    resource_group_name: rg-global-networking
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_security:
+    subscription_id:     ref:azure_subscriptions.global_security.subscription_id
+    resource_group_name: rg-global-security
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_identity:
+    subscription_id:     ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name: rg-global-identity
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_management:
+    subscription_id:     ref:azure_subscriptions.global_management.subscription_id
+    resource_group_name: rg-global-management
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+
+  # ── Dev ──
+  dev_networking:
+    subscription_id:     ref:azure_subscriptions.dev_networking.subscription_id
+    resource_group_name: rg-dev-networking
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_security:
+    subscription_id:     ref:azure_subscriptions.dev_security.subscription_id
+    resource_group_name: rg-dev-security
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_identity:
+    subscription_id:     ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name: rg-dev-identity
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_management:
+    subscription_id:     ref:azure_subscriptions.dev_management.subscription_id
+    resource_group_name: rg-dev-management
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+
+  # ── Prod ──
+  prod_networking:
+    subscription_id:     ref:azure_subscriptions.prod_networking.subscription_id
+    resource_group_name: rg-prod-networking
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_security:
+    subscription_id:     ref:azure_subscriptions.prod_security.subscription_id
+    resource_group_name: rg-prod-security
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_identity:
+    subscription_id:     ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name: rg-prod-identity
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_management:
+    subscription_id:     ref:azure_subscriptions.prod_management.subscription_id
+    resource_group_name: rg-prod-management
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+
+  # ── GDPR ──
+  gdpr_networking:
+    subscription_id:     ref:azure_subscriptions.gdpr_networking.subscription_id
+    resource_group_name: rg-gdpr-networking
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_security:
+    subscription_id:     ref:azure_subscriptions.gdpr_security.subscription_id
+    resource_group_name: rg-gdpr-security
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_identity:
+    subscription_id:     ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name: rg-gdpr-identity
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_management:
+    subscription_id:     ref:azure_subscriptions.gdpr_management.subscription_id
+    resource_group_name: rg-gdpr-management
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+
+# ══════════════════════════════════════════════════════════════════════════════
+# User-Assigned Managed Identities (16 — centralised per tenant in identity sub)
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_user_assigned_identities:
+  # ── Global (in global_identity sub / rg-global-identity) ──
+  global_networking:
+    subscription_id:     ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:       id-global-networking-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_security:
+    subscription_id:     ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:       id-global-security-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_identity:
+    subscription_id:     ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:       id-global-identity-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_management:
+    subscription_id:     ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:       id-global-management-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+
+  # ── Dev (in dev_identity sub / rg-dev-identity) ──
+  dev_networking:
+    subscription_id:     ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:       id-dev-networking-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_security:
+    subscription_id:     ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:       id-dev-security-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_identity:
+    subscription_id:     ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:       id-dev-identity-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_management:
+    subscription_id:     ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:       id-dev-management-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+
+  # ── Prod (in prod_identity sub / rg-prod-identity) ──
+  prod_networking:
+    subscription_id:     ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:       id-prod-networking-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_security:
+    subscription_id:     ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:       id-prod-security-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_identity:
+    subscription_id:     ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:       id-prod-identity-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_management:
+    subscription_id:     ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:       id-prod-management-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+
+  # ── GDPR (in gdpr_identity sub / rg-gdpr-identity) ──
+  gdpr_networking:
+    subscription_id:     ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:       id-gdpr-networking-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_security:
+    subscription_id:     ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:       id-gdpr-security-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_identity:
+    subscription_id:     ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:       id-gdpr-identity-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_management:
+    subscription_id:     ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name: ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:       id-gdpr-management-github-oidc
+    location:            swedencentral
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Role Assignments — Owner on each domain subscription (16)
+# Built-in Owner role: 33333333-3333-3333-3333-333333333333
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_role_assignments:
+  # ── Global ──
+  global_networking_owner:
+    subscription_id:    ref:azure_subscriptions.global_networking.subscription_id
+    scope:              ref:azure_subscriptions.global_networking.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.global_networking.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Global-Networking UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_security_owner:
+    subscription_id:    ref:azure_subscriptions.global_security.subscription_id
+    scope:              ref:azure_subscriptions.global_security.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.global_security.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Global-Security UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_identity_owner:
+    subscription_id:    ref:azure_subscriptions.global_identity.subscription_id
+    scope:              ref:azure_subscriptions.global_identity.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.global_identity.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Global-Identity UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_management_owner:
+    subscription_id:    ref:azure_subscriptions.global_management.subscription_id
+    scope:              ref:azure_subscriptions.global_management.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.global_management.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Global-Management UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+
+  # ── Dev ──
+  dev_networking_owner:
+    subscription_id:    ref:azure_subscriptions.dev_networking.subscription_id
+    scope:              ref:azure_subscriptions.dev_networking.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.dev_networking.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Dev-Networking UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_security_owner:
+    subscription_id:    ref:azure_subscriptions.dev_security.subscription_id
+    scope:              ref:azure_subscriptions.dev_security.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.dev_security.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Dev-Security UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_identity_owner:
+    subscription_id:    ref:azure_subscriptions.dev_identity.subscription_id
+    scope:              ref:azure_subscriptions.dev_identity.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.dev_identity.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Dev-Identity UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_management_owner:
+    subscription_id:    ref:azure_subscriptions.dev_management.subscription_id
+    scope:              ref:azure_subscriptions.dev_management.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.dev_management.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Dev-Management UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+
+  # ── Prod ──
+  prod_networking_owner:
+    subscription_id:    ref:azure_subscriptions.prod_networking.subscription_id
+    scope:              ref:azure_subscriptions.prod_networking.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.prod_networking.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Prod-Networking UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_security_owner:
+    subscription_id:    ref:azure_subscriptions.prod_security.subscription_id
+    scope:              ref:azure_subscriptions.prod_security.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.prod_security.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Prod-Security UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_identity_owner:
+    subscription_id:    ref:azure_subscriptions.prod_identity.subscription_id
+    scope:              ref:azure_subscriptions.prod_identity.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.prod_identity.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Prod-Identity UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_management_owner:
+    subscription_id:    ref:azure_subscriptions.prod_management.subscription_id
+    scope:              ref:azure_subscriptions.prod_management.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.prod_management.principal_id
+    principal_type:     ServicePrincipal
+    description:        "Prod-Management UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+
+  # ── GDPR ──
+  gdpr_networking_owner:
+    subscription_id:    ref:azure_subscriptions.gdpr_networking.subscription_id
+    scope:              ref:azure_subscriptions.gdpr_networking.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.gdpr_networking.principal_id
+    principal_type:     ServicePrincipal
+    description:        "GDPR-Networking UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_security_owner:
+    subscription_id:    ref:azure_subscriptions.gdpr_security.subscription_id
+    scope:              ref:azure_subscriptions.gdpr_security.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.gdpr_security.principal_id
+    principal_type:     ServicePrincipal
+    description:        "GDPR-Security UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_identity_owner:
+    subscription_id:    ref:azure_subscriptions.gdpr_identity.subscription_id
+    scope:              ref:azure_subscriptions.gdpr_identity.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.gdpr_identity.principal_id
+    principal_type:     ServicePrincipal
+    description:        "GDPR-Identity UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_management_owner:
+    subscription_id:    ref:azure_subscriptions.gdpr_management.subscription_id
+    scope:              ref:azure_subscriptions.gdpr_management.scope
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/33333333-3333-3333-3333-333333333333
+    principal_id:       ref:azure_user_assigned_identities.gdpr_management.principal_id
+    principal_type:     ServicePrincipal
+    description:        "GDPR-Management UAI Owner (managed by terraform-rest-galaxy)"
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Federated Identity Credentials (20 = 8 global branch-based + 12 env-based)
+# ══════════════════════════════════════════════════════════════════════════════
+
+azure_federated_identity_credentials:
+  # ── Global: branch-based (main + PR per domain UAI) ──
+  global_networking_main:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_networking.name
+    federated_credential_name: github-oidc-main
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:ref:refs/heads/main"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_networking_pr:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_networking.name
+    federated_credential_name: github-oidc-pr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:pull_request"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_security_main:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_security.name
+    federated_credential_name: github-oidc-main
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:ref:refs/heads/main"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_security_pr:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_security.name
+    federated_credential_name: github-oidc-pr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:pull_request"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_identity_main:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_identity.name
+    federated_credential_name: github-oidc-main
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:ref:refs/heads/main"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_identity_pr:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_identity.name
+    federated_credential_name: github-oidc-pr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:pull_request"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_management_main:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_management.name
+    federated_credential_name: github-oidc-main
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:ref:refs/heads/main"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+  global_management_pr:
+    subscription_id:           ref:azure_subscriptions.global_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.global_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.global_management.name
+    federated_credential_name: github-oidc-pr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Global:pull_request"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_global.tenant_id
+
+  # ── Domain repos: environment-based (1 FIC per UAI) ──
+  # Dev
+  dev_networking:
+    subscription_id:           ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.dev_networking.name
+    federated_credential_name: github-oidc-dev
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Networking:environment:dev"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_security:
+    subscription_id:           ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.dev_security.name
+    federated_credential_name: github-oidc-dev
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Security:environment:dev"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_identity:
+    subscription_id:           ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.dev_identity.name
+    federated_credential_name: github-oidc-dev
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Identity:environment:dev"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+  dev_management:
+    subscription_id:           ref:azure_subscriptions.dev_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.dev_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.dev_management.name
+    federated_credential_name: github-oidc-dev
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Management:environment:dev"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_dev.tenant_id
+
+  # Prod
+  prod_networking:
+    subscription_id:           ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.prod_networking.name
+    federated_credential_name: github-oidc-prod
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Networking:environment:prod"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_security:
+    subscription_id:           ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.prod_security.name
+    federated_credential_name: github-oidc-prod
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Security:environment:prod"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_identity:
+    subscription_id:           ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.prod_identity.name
+    federated_credential_name: github-oidc-prod
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Identity:environment:prod"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+  prod_management:
+    subscription_id:           ref:azure_subscriptions.prod_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.prod_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.prod_management.name
+    federated_credential_name: github-oidc-prod
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Management:environment:prod"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_prod.tenant_id
+
+  # GDPR
+  gdpr_networking:
+    subscription_id:           ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.gdpr_networking.name
+    federated_credential_name: github-oidc-gdpr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Networking:environment:gdpr"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_security:
+    subscription_id:           ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.gdpr_security.name
+    federated_credential_name: github-oidc-gdpr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Security:environment:gdpr"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_identity:
+    subscription_id:           ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.gdpr_identity.name
+    federated_credential_name: github-oidc-gdpr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Identity:environment:gdpr"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id
+  gdpr_management:
+    subscription_id:           ref:azure_subscriptions.gdpr_identity.subscription_id
+    resource_group_name:       ref:azure_resource_groups.gdpr_identity.resource_group_name
+    identity_name:             ref:azure_user_assigned_identities.gdpr_management.name
+    federated_credential_name: github-oidc-gdpr
+    issuer:                    "https://token.actions.githubusercontent.com"
+    subject:                   "repo:Contoso-Org/Platform-Management:environment:gdpr"
+    audiences:                 ["api://AzureADTokenExchange"]
+    _tenant: ref:externals.azure_tenants.contoso_gdpr.tenant_id

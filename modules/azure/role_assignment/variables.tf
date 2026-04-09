@@ -6,6 +6,13 @@ variable "check_existance" {
   description = "Check whether the resource already exists before creating it. When true, the provider performs a GET before PUT and imports the resource into state if it exists. Set to true for brownfield import workflows."
 }
 
+variable "header" {
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+  description = "Optional HTTP headers to override for this resource (e.g. cross-tenant Authorization)."
+}
+
 # ── Scope ────────────────────────────────────────────────────────────────────
 
 variable "subscription_id" {

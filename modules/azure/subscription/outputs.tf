@@ -26,3 +26,8 @@ output "provisioning_state" {
   description = "The provisioning state of the subscription alias."
   value       = try(rest_resource.subscription.output.properties.provisioningState, null)
 }
+
+output "scope" {
+  description = "The subscription-scoped ARM path (/subscriptions/{subscription_id}), known after apply. Use as the scope input for subscription-level role assignments."
+  value       = try("/subscriptions/${rest_resource.subscription.output.properties.subscriptionId}", null)
+}

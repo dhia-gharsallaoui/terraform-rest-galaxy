@@ -396,6 +396,12 @@ terraform {
 - Set `create_method = "PUT"` (ARM standard for idempotent creates).
 - Set `check_existance = true` for resources scoped to a subscription or resource group (e.g. resource groups, user-assigned identities, role assignments). The provider performs a GET before PUT; if the resource already exists, it is imported into state instead of failing with 409. **Do NOT set `check_existance` on globally-unique resources** (e.g. key vaults, storage accounts) — a 409 there could mean the name is taken by another tenant or soft-deleted, and importing would be incorrect.
 - Build `body` as an object containing only writable variables (exclude read-only fields). For resources with writable **collection properties** that ARM initializes to defaults (e.g., empty arrays for rule collections on firewalls), include them in the body with default-empty variables — see [Pattern #6](../.github/patterns/rest-provider-patterns.md#6-arm-body-defaults-for-writable-collection-properties).
+- **`force_new_attrs`** — For body properties that Azure treats as **immutable** (update returns 400), add `force_new_attrs` to trigger destroy+create on change instead of an in-place update that would fail. Common examples: `properties.principalId` on role assignments, `properties.issuer`/`properties.subject` on federated identity credentials. See [Pattern #19](../.github/patterns/rest-provider-patterns.md#19-force_new_attrs--immutable-body-properties).
+  ```hcl
+  force_new_attrs = toset([
+    "properties.principalId",
+  ])
+  ```
 - **Always add `output_attrs`** — whitelist only the output fields needed by `outputs.tf`. This prevents the full ARM GET response from being stored in `.output`, which reduces state size and avoids output drift. Determine the list by reading `outputs.tf` and collecting every gjson path accessed via `rest_resource.<name>.output.<path>`. Always include `"properties.provisioningState"`. See [Pattern #2](../.github/patterns/rest-provider-patterns.md#2-output_attrs--controlling-output-state-size).
   ```hcl
   output_attrs = toset([
@@ -654,8 +660,27 @@ provider "rest" {
       }
     }
   }
+
+  # Provider-level retry for transient Azure errors.
+  # Handles 409 (concurrent writes, e.g. FIC on same UAI),
+  # 429 (throttling), and 5xx (transient backend failures).
+  client = {
+    retry = {
+      status_codes    = [409, 429, 500, 502, 503]
+      count           = 5
+      wait_in_sec     = 2
+      max_wait_in_sec = 120
+    }
+  }
 }
 ```
+
+> **Provider retry** — The `client.retry` block handles transient errors at the provider level, eliminating the need for manual re-applies. Key use cases:
+> - **409** — concurrent writes on the same parent resource (e.g. multiple FICs on one UAI: `ConcurrentFederatedIdentityCredentialsWritesForSingleManagedIdentity`)
+> - **429** — ARM throttling
+> - **5xx** — transient backend failures
+>
+> See [Pattern #20](../.github/patterns/rest-provider-patterns.md#20-provider-level-retry-for-transient-errors).
 
 #### `azure_variables.tf` (create if absent)
 

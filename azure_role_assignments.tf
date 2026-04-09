@@ -9,6 +9,7 @@ variable "azure_role_assignments" {
     description        = optional(string, null)
     condition          = optional(string, null)
     condition_version  = optional(string, null)
+    _tenant            = optional(string, null)
   }))
   description = <<-EOT
     Map of role assignments to create. Each map key acts as the for_each identifier.
@@ -49,4 +50,9 @@ module "azure_role_assignments" {
   condition          = try(each.value.condition, null)
   condition_version  = try(each.value.condition_version, null)
   check_existance    = var.check_existance
+
+  # Cross-tenant: if _tenant is set, override the Authorization header
+  header = try(each.value._tenant, null) != null ? {
+    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
+  } : {}
 }

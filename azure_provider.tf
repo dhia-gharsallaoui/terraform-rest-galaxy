@@ -23,6 +23,15 @@ provider "rest" {
     Authorization = "Bearer ${var.azure_access_token}"
   } : {}
 
+  client = {
+    retry = {
+      status_codes    = [409, 429, 500, 502, 503]
+      count           = 5
+      wait_in_sec     = 2
+      max_wait_in_sec = 120
+    }
+  }
+
   # Ref-resolver tokens for validate_externals and provider functions
   arm_token         = var.azure_access_token
   arm_tenant_tokens = var.arm_tenant_tokens

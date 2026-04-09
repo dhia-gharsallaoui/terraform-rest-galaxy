@@ -9,6 +9,7 @@ variable "azure_federated_identity_credentials" {
     issuer                    = string
     subject                   = string
     audiences                 = optional(list(string), ["api://AzureADTokenExchange"])
+    _tenant                   = optional(string, null)
   }))
   description = "Map of federated identity credentials to create for workload identity federation."
   default     = {}
@@ -36,4 +37,9 @@ module "azure_federated_identity_credentials" {
   subject                   = each.value.subject
   audiences                 = try(each.value.audiences, ["api://AzureADTokenExchange"])
   check_existance           = var.check_existance
+
+  # Cross-tenant: if _tenant is set, override the Authorization header
+  header = try(each.value._tenant, null) != null ? {
+    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
+  } : {}
 }

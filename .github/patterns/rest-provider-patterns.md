@@ -1084,3 +1084,129 @@ resource "rest_operation" "wait" {
   poll = { ... }
 }
 ```
+
+---
+
+## 19. `force_new_attrs` — Immutable Body Properties
+
+### Problem
+
+Some Azure resource properties are **immutable after creation**. Attempting an in-place update returns a 400 error (e.g. `RoleAssignmentUpdateNotPermitted` when changing `principalId` on a role assignment, or changing `issuer`/`subject` on a federated identity credential). Terraform's default behaviour is to attempt an update, which fails.
+
+### Solution
+
+Add `force_new_attrs` to the `rest_resource` block listing the immutable body property paths. When any of these change, the provider destroys the old resource and creates a new one instead of attempting an in-place update.
+
+```hcl
+resource "rest_resource" "role_assignment" {
+  path          = local.ra_path
+  create_method = "PUT"
+
+  body = local.body
+
+  # principalId is immutable — Azure rejects updates with 400
+  # RoleAssignmentUpdateNotPermitted. Force destroy+create on change.
+  force_new_attrs = toset([
+    "properties.principalId",
+  ])
+}
+```
+
+### How to Identify Immutable Properties
+
+1. Check the Azure REST API spec — look for properties marked as `x-ms-mutability: ["create", "read"]` (no `"update"`)
+2. Check ARM error codes — if an update attempt returns 400 with a message like `*UpdateNotPermitted` or `*CannotBeChanged`, the property is immutable
+3. Common immutable properties:
+   - `properties.principalId` on role assignments
+   - `properties.issuer` and `properties.subject` on federated identity credentials
+   - `properties.principalType` on role assignments
+   - `properties.roleDefinitionId` on role assignments (scope change)
+
+### When NOT to Use
+
+- For properties that **can** be updated in-place — only use `force_new_attrs` for genuinely immutable properties
+- For the resource path itself — path changes already trigger replacement automatically
+
+---
+
+## 20. Provider-Level Retry for Transient Errors
+
+### Problem
+
+Azure ARM operations can fail with transient errors that succeed on retry:
+- **409** — concurrent writes on the same parent resource (e.g. `ConcurrentFederatedIdentityCredentialsWritesForSingleManagedIdentity` when creating multiple FICs on the same UAI)
+- **429** — ARM request throttling
+- **500/502/503** — transient backend failures
+
+Without provider-level retry, these require manual `terraform apply` re-runs.
+
+### Solution
+
+Configure `client.retry` in the provider block to automatically retry on transient status codes:
+
+```hcl
+provider "rest" {
+  base_url = "https://management.azure.com"
+
+  # ...auth config...
+
+  client = {
+    retry = {
+      status_codes    = [409, 429, 500, 502, 503]
+      count           = 5
+      wait_in_sec     = 2
+      max_wait_in_sec = 120
+    }
+  }
+}
+```
+
+### Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| Include 409 | Azure FIC concurrent write errors are transient — the second write succeeds after the first completes |
+| Include 429 | ARM throttling is by design transient — wait and retry |
+| `count = 5` | Enough retries for concurrent FIC writes (typically resolves in 2–3 retries) |
+| `wait_in_sec = 2` | Short initial backoff; provider uses exponential backoff up to `max_wait_in_sec` |
+| `max_wait_in_sec = 120` | Caps wait at 2 minutes — long enough for ARM throttle windows |
+
+### When to Use
+
+- **Always** on the root module provider for Azure ARM — transient errors are inherent to ARM operations at scale
+- Particularly important when creating multiple resources on the same parent (e.g. FICs on a UAI, role assignments on a subscription)
+
+---
+
+## 21. Subscription `scope` Output for Cross-Subscription Role Assignments
+
+### Problem
+
+When creating role assignments scoped to a subscription, the `scope` path (`/subscriptions/{id}`) must be known. If the subscription is managed by Terraform (e.g. via the subscription module), its `subscriptionId` is only available in `rest_resource.*.output.properties.subscriptionId` — known after apply. The role assignment module needs this at plan time for path construction.
+
+### Solution
+
+Add a `scope` output to the subscription module that constructs the ARM-scoped path from the API-sourced subscription ID:
+
+```hcl
+# modules/azure/subscription/outputs.tf
+output "scope" {
+  description = "The subscription-scoped ARM path (/subscriptions/{id}), known after apply."
+  value       = try("/subscriptions/${rest_resource.subscription.output.properties.subscriptionId}", null)
+}
+```
+
+In the YAML configuration, role assignments reference this via `ref:`:
+
+```yaml
+azure_role_assignments:
+  platform_networking_owner:
+    scope: ref:azure_subscriptions.platform_networking.scope
+    principal_id: ref:azure_user_assigned_identities.platform_networking.principal_id
+    role_definition_id: /providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635
+    principal_type: ServicePrincipal
+```
+
+### Key Point
+
+A UAI in subscription A can hold an Owner role assignment scoped to subscription B. The UAI's location and the role assignment's scope are independent.
