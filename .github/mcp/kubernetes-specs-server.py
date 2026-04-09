@@ -23,7 +23,7 @@ differs from the currently checked-out tag, the server runs
 
 Environment:
   K8S_SPECS_ROOT  — path to the kubernetes/kubernetes repo root
-                    (default: /Users/laurentlesle/git/github.com/kubernetes/kubernetes)
+                    (default: specs/kubernetes, relative to repo root)
 """
 
 import sys
@@ -50,9 +50,18 @@ def _log(msg: str) -> None:
 REPO_ROOT = Path(
     os.environ.get(
         "K8S_SPECS_ROOT",
-        "/Users/laurentlesle/git/github.com/kubernetes/kubernetes",
+        "specs/kubernetes",
     )
 )
+
+# ── Keep the backing submodule fresh on startup ───────────────────────────────
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from _spec_updater import ensure_latest
+
+    ensure_latest(REPO_ROOT, log=_log)
+except Exception as _exc:  # pragma: no cover - defensive
+    _log(f"spec auto-update skipped: {_exc!r}")
 
 OPENAPI_V3_DIR = "api/openapi-spec/v3"
 SWAGGER_PATH = "api/openapi-spec/swagger.json"

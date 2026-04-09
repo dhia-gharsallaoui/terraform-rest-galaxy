@@ -24,7 +24,7 @@ first use and cached in memory.
 
 Environment:
   GITHUB_SPECS_ROOT  — path to the rest-api-description repo root
-                       (default: /Users/laurentlesle/git/github.com/github/rest-api-description)
+                       (default: specs/rest-api-description, relative to repo root)
 """
 
 import sys
@@ -50,9 +50,18 @@ def _log(msg: str) -> None:
 REPO_ROOT = Path(
     os.environ.get(
         "GITHUB_SPECS_ROOT",
-        "/Users/laurentlesle/git/github.com/github/rest-api-description",
+        "specs/rest-api-description",
     )
 )
+
+# ── Keep the backing submodule fresh on startup ───────────────────────────────
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from _spec_updater import ensure_latest
+
+    ensure_latest(REPO_ROOT, log=_log)
+except Exception as _exc:  # pragma: no cover - defensive
+    _log(f"spec auto-update skipped: {_exc!r}")
 
 # ── MCP JSON-RPC transport ────────────────────────────────────────────────────
 
