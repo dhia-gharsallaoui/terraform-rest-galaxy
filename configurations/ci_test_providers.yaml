@@ -1,0 +1,23 @@
+# CI test subscription — resource provider registrations
+#
+# Registers Azure resource providers required by the test suite in the CI
+# test subscription. Applied automatically by the apply-tests CI job before
+# running tests that assert provider-specific preconditions.
+#
+# Prerequisites:
+#   export TF_VAR_access_token=$(az account get-access-token \
+#     --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+#   TF_VAR_config_file=configurations/ci_test_providers.yaml terraform apply
+
+# ci:requires-live-token
+# (provider registrations are write operations — apply, not plan)
+
+# ── State backend ─────────────────────────────────────────────────────────────
+terraform_backend:
+  type: local
+  path: ci_test_providers.tfstate
+
+azure_resource_provider_registrations:
+  cognitiveservices:
+    resource_provider_namespace: Microsoft.CognitiveServices
