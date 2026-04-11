@@ -9,6 +9,8 @@ on:
       - "github_*.tf"
       - "k8s_*.tf"
       - "scripts/generate-docs.py"
+      - "modules/**/*.tf"
+      - ".terraform-docs.yml"
   workflow_dispatch:
 
 jobs:
@@ -32,16 +34,26 @@ jobs:
       - name: Generate docs/yaml-reference.md
         run: python3 scripts/generate-docs.py
 
+      - name: Setup terraform-docs
+        uses: terraform-docs/gh-actions@v1
+        with:
+          working-dir: .
+          recursive: true
+          recursive-path: modules
+          output-file: README.md
+          output-method: replace
+          git-push: "false"
+
       - name: Commit and push if changed
         # Only push on non-fork PRs and direct pushes to main — fork PRs have no write access
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/yaml-reference.md docs/yaml-reference-azure.md docs/yaml-reference-entraid.md docs/yaml-reference-github.md docs/yaml-reference-k8s.md
+          git add docs/yaml-reference.md docs/yaml-reference-azure.md docs/yaml-reference-entraid.md docs/yaml-reference-github.md docs/yaml-reference-k8s.md modules/
           if git diff --staged --quiet; then
             echo "No documentation changes."
           else
-            git commit -m "docs: regenerate yaml-reference.md [skip ci]"
+            git commit -m "docs: regenerate yaml-reference and module READMEs [skip ci]"
             git push
           fi
