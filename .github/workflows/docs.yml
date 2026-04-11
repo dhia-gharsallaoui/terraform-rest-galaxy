@@ -9,14 +9,6 @@ on:
       - "github_*.tf"
       - "k8s_*.tf"
       - "scripts/generate-docs.py"
-  pull_request:
-    branches: [main]
-    paths:
-      - "azure_*.tf"
-      - "entraid_*.tf"
-      - "github_*.tf"
-      - "k8s_*.tf"
-      - "scripts/generate-docs.py"
   workflow_dispatch:
 
 jobs:
@@ -29,8 +21,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
