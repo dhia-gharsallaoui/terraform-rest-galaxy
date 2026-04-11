@@ -45,7 +45,7 @@ jobs:
           fi
 
       - name: Upload provider artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-provider-rest
           path: ~/.terraform.d/plugins/
@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download provider artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: terraform-provider-rest
           path: ~/.terraform.d/plugins/
@@ -163,7 +163,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download provider artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: terraform-provider-rest
           path: ~/.terraform.d/plugins/
@@ -203,7 +203,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download provider artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: terraform-provider-rest
           path: ~/.terraform.d/plugins/
@@ -236,6 +236,11 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+      - name: Register Azure resource providers required by tests
+        run: |
+          # Microsoft.CognitiveServices — required by foundry_account + foundry_deployment tests
+          az provider register --namespace Microsoft.CognitiveServices --wait || true
+
       - name: Run apply tests (tests/azure)
         env:
           TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
@@ -258,10 +263,11 @@ jobs:
           TF_VAR_azure_access_token: ${{ steps.token.outputs.access_token }}
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          # Auto-discover all Azure unit + integration tests (require real credentials)
+          # Auto-discover all Azure unit + integration tests (require real credentials).
+          # Skip tests marked with '# ci:skip' (e.g. require partnership Azure providers).
           filters=()
           for f in tests/unit_azure_*.tftest.hcl tests/integration_azure_*.tftest.hcl; do
-            [ -f "$f" ] && filters+=("-filter=$f")
+            [ -f "$f" ] && ! grep -q "^# ci:skip" "$f" && filters+=("-filter=$f")
           done
           if [ ${#filters[@]} -gt 0 ]; then
             terraform test "${filters[@]}"

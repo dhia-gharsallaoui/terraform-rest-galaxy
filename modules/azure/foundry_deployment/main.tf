@@ -103,8 +103,11 @@ resource "rest_resource" "foundry_deployment" {
 
   lifecycle {
     precondition {
+      # FilterAttrsInJSON preserves the JSON structure: output_attrs = ["value.#.model.name"]
+      # filters the response to {"value": [{"model": {"name": "..."}}, ...]}.
+      # Access via output.value (a list of objects) and extract names with a for expression.
       condition = contains(
-        jsondecode(data.rest_resource.available_models.output["value.#.model.name"]),
+        [for item in data.rest_resource.available_models.output.value : item.model.name],
         var.model_name
       )
       error_message = <<-EOT

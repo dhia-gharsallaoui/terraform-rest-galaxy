@@ -1,6 +1,12 @@
 # Unit test — modules/azure/github_network_settings
 # Tests the sub-module in isolation (plan only).
 # Run: terraform test -filter=tests/unit_azure_github_network_settings.tftest.hcl
+#
+# ci:skip
+# GitHub.Network is a partnership-only Azure resource provider that cannot be
+# registered in a standard subscription. The provider_check precondition will
+# always fire in CI. Run this test manually against a subscription with the
+# GitHub-Azure network integration enabled.
 
 variable "access_token" {
   type      = string
