@@ -17,9 +17,9 @@ locals {
 }
 
 resource "rest_resource" "management_lock" {
-  path             = local.lock_path
-  create_method    = "PUT"
-  auth_ref         = var.auth_ref
+  path          = local.lock_path
+  create_method = "PUT"
+  auth_ref      = var.auth_ref
 
   query = {
     api-version = [local.api_version]

@@ -53,10 +53,10 @@ locals {
 resource "rest_resource" "ea_role_assignment" {
   count = local.is_mca ? 0 : 1
 
-  path             = "${local.scope}/billingRoleAssignments/${random_uuid.role_assignment_name.result}"
-  create_method    = "PUT"
-  check_existance  = var.check_existance
-  auth_ref         = var.auth_ref
+  path            = "${local.scope}/billingRoleAssignments/${random_uuid.role_assignment_name.result}"
+  create_method   = "PUT"
+  check_existance = var.check_existance
+  auth_ref        = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -83,10 +83,10 @@ resource "rest_resource" "ea_role_assignment" {
 resource "rest_resource" "mca_role_assignment" {
   count = local.is_mca && !local.is_invoice_section && var.billing_request_id == null ? 1 : 0
 
-  path             = "${local.scope}/createBillingRoleAssignment"
-  create_method    = "POST"
-  read_path        = "$unescape(body.id)" # Server-generated; unescape prevents %2F encoding
-  auth_ref         = var.auth_ref
+  path          = "${local.scope}/createBillingRoleAssignment"
+  create_method = "POST"
+  read_path     = "$unescape(body.id)" # Server-generated; unescape prevents %2F encoding
+  auth_ref      = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -128,9 +128,9 @@ resource "rest_resource" "mca_role_assignment" {
 resource "rest_operation" "mca_invoice_section_role_request" {
   count = local.is_invoice_section && var.billing_request_id == null ? 1 : 0
 
-  path             = "${local.scope}/createBillingRoleAssignment"
-  method           = "POST"
-  auth_ref         = var.auth_ref
+  path     = "${local.scope}/createBillingRoleAssignment"
+  method   = "POST"
+  auth_ref = var.auth_ref
 
   query = {
     api-version = [local.api_version]
