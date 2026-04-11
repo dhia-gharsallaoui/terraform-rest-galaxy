@@ -47,18 +47,20 @@ def _log(msg: str) -> None:
         pass
 
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 REPO_ROOT = Path(
     os.environ.get(
         "K8S_SPECS_ROOT",
-        "specs/kubernetes",
+        str(_REPO_ROOT / "specs/kubernetes"),
     )
 )
 
 # ── Keep the backing submodule fresh on startup ───────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from _spec_updater import ensure_latest
+    from _spec_updater import ensure_initialized, ensure_latest
 
+    ensure_initialized(REPO_ROOT, log=_log)
     ensure_latest(REPO_ROOT, log=_log)
 except Exception as _exc:  # pragma: no cover - defensive
     _log(f"spec auto-update skipped: {_exc!r}")

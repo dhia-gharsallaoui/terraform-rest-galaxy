@@ -33,18 +33,20 @@ def _log(msg: str) -> None:
     except Exception:
         pass
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SPECS_ROOT = Path(
     os.environ.get(
         "AZURE_SPECS_ROOT",
-        "specs/azure-rest-api-specs/specification",
+        str(_REPO_ROOT / "specs/azure-rest-api-specs/specification"),
     )
 )
 
 # ── Keep the backing submodule fresh on startup ───────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from _spec_updater import ensure_latest
+    from _spec_updater import ensure_initialized, ensure_latest
 
+    ensure_initialized(SPECS_ROOT.parent, log=_log)
     ensure_latest(SPECS_ROOT.parent, log=_log)
 except Exception as _exc:  # pragma: no cover - defensive
     _log(f"spec auto-update skipped: {_exc!r}")

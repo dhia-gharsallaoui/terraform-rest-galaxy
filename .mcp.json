@@ -3,34 +3,22 @@
     "azure-specs": {
       "type": "stdio",
       "command": "python3",
-      "args": [".github/mcp/azure-specs-server.py"],
-      "env": {
-        "AZURE_SPECS_ROOT": "specs/azure-rest-api-specs/specification"
-      }
+      "args": ["../.github/mcp/azure-specs-server.py"]
     },
     "msgraph-specs": {
       "type": "stdio",
       "command": "python3",
-      "args": [".github/mcp/msgraph-specs-server.py"],
-      "env": {
-        "MSGRAPH_SPECS_ROOT": "specs/msgraph-metadata"
-      }
+      "args": ["../.github/mcp/msgraph-specs-server.py"]
     },
     "github-specs": {
       "type": "stdio",
       "command": "python3",
-      "args": [".github/mcp/github-specs-server.py"],
-      "env": {
-        "GITHUB_SPECS_ROOT": "specs/rest-api-description"
-      }
+      "args": ["../.github/mcp/github-specs-server.py"]
     },
     "kubernetes-specs": {
       "type": "stdio",
       "command": "python3",
-      "args": [".github/mcp/kubernetes-specs-server.py"],
-      "env": {
-        "K8S_SPECS_ROOT": "specs/kubernetes"
-      }
+      "args": ["../.github/mcp/kubernetes-specs-server.py"]
     },
     "drawio": {
       "type": "stdio",

@@ -45,6 +45,58 @@ def _resolve_git_dir(submodule_root: Path) -> Path | None:
     return None
 
 
+def ensure_initialized(submodule_root: Path, log: Callable[[str], None] = _noop) -> None:
+    """Run ``git submodule update --init`` for *submodule_root* if not yet checked out.
+
+    Finds the superproject root by walking up to the directory that contains
+    ``.gitmodules``, then runs ``git submodule update --init --recommend-shallow
+    --depth 1 <relative-path>``.  Silent on failure — the server will surface
+    the missing content as a tool error when a caller actually needs it.
+    """
+    name = submodule_root.name or str(submodule_root)
+
+    if _resolve_git_dir(submodule_root) is not None:
+        return  # already initialized
+
+    # Walk up to find the superproject root (directory containing .gitmodules)
+    superproject = submodule_root.resolve()
+    for _ in range(10):
+        superproject = superproject.parent
+        if (superproject / ".gitmodules").exists():
+            break
+    else:
+        log(f"init: could not find superproject root for [{name}]")
+        return
+
+    try:
+        rel = submodule_root.resolve().relative_to(superproject)
+    except ValueError:
+        log(f"init: submodule not under superproject [{name}]")
+        return
+
+    log(f"init: submodule not initialized — running git submodule update --init [{rel}]")
+    try:
+        result = subprocess.run(
+            [
+                "git", "-C", str(superproject),
+                "submodule", "update", "--init", "--recommend-shallow", "--depth", "1",
+                str(rel),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            log(f"init: submodule initialized [{name}]")
+        else:
+            err = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown"
+            log(f"init: submodule init failed ({err[:160]}) [{name}]")
+    except subprocess.TimeoutExpired:
+        log(f"init: submodule init timed out [{name}]")
+    except Exception as exc:
+        log(f"init: unexpected error {exc!r} [{name}]")
+
+
 def ensure_latest(submodule_root: Path, log: Callable[[str], None] = _noop) -> None:
     """Fast-forward ``submodule_root`` to origin/HEAD if stale.
 
