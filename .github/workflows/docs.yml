@@ -37,9 +37,8 @@ jobs:
       - name: Setup terraform-docs
         uses: terraform-docs/gh-actions@v1
         with:
-          working-dir: .
+          working-dir: modules
           recursive: true
-          recursive-path: modules
           output-file: README.md
           output-method: replace
           git-push: "false"
