@@ -1,0 +1,37 @@
+# Storage Account Blob Service — Basic Configuration
+#
+# Configures blob service settings (soft delete, versioning, change feed)
+# on an existing storage account.
+#
+# Prerequisites:
+#   - A storage account must already exist (managed in this or another config)
+#   - export TF_VAR_access_token=$(az account get-access-token \
+#       --resource https://management.azure.com --query accessToken -o tsv)
+#   - TF_VAR_config_file=configurations/storage_account_blob_service_basic.yaml terraform apply
+
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+azure_storage_account_blob_services:
+  app_blobs:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: mystorageaccount
+
+    # Soft delete for blobs — 7 day retention
+    delete_retention_policy:
+      enabled: true
+      days: 7
+      allow_permanent_delete: false
+
+    # Soft delete for containers — 7 day retention
+    container_delete_retention_policy:
+      enabled: true
+      days: 7
+
+    # Enable versioning and change feed
+    is_versioning_enabled: true
+    change_feed_enabled: true
+    change_feed_retention_in_days: 30

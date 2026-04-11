@@ -1,0 +1,14 @@
+# Minimum file service configuration — applies default file service settings
+# to an existing storage account.
+#
+# Usage:
+#   TF_VAR_config_file=examples/azure/storage_account_file_service/minimum/config.yaml.example \
+#   terraform apply
+
+default_location: westeurope
+
+azure_storage_account_file_services:
+  minimum:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: mystorageaccount

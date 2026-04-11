@@ -1,0 +1,48 @@
+# Complete file service configuration — demonstrates all available settings.
+#
+# Usage:
+#   TF_VAR_config_file=examples/azure/storage_account_file_service/complete/config.yaml.example \
+#   terraform apply
+
+default_location: westeurope
+
+azure_storage_account_file_services:
+  complete:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: mystorageaccount
+
+    # CORS
+    cors_rules:
+      - allowed_origins:
+          - "https://app.contoso.com"
+        allowed_methods:
+          - GET
+          - HEAD
+          - OPTIONS
+        allowed_headers:
+          - "*"
+        exposed_headers:
+          - x-ms-request-id
+        max_age_in_seconds: 3600
+
+    # Share soft delete (7 days)
+    share_delete_retention_policy:
+      enabled: true
+      days: 7
+
+    # SMB hardening — restrict to modern, secure settings
+    smb_versions:
+      - SMB3.0
+      - SMB3.1.1
+    smb_authentication_methods:
+      - Kerberos
+    smb_kerberos_ticket_encryption:
+      - AES-256
+    smb_channel_encryption:
+      - AES-128-GCM
+      - AES-256-GCM
+
+    # NFS (Premium FileStorage only)
+    # nfs_v3_enabled: false
+    # nfs_v4_1_enabled: false

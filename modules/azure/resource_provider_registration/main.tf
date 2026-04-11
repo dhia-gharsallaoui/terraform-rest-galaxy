@@ -15,9 +15,9 @@ locals {
 }
 
 resource "rest_operation" "register" {
-  path             = local.register_path
-  method           = "POST"
-  auth_ref         = var.auth_ref
+  path     = local.register_path
+  method   = "POST"
+  auth_ref = var.auth_ref
 
   query = {
     api-version = [local.api_version]

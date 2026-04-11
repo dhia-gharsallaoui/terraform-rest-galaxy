@@ -64,3 +64,38 @@ output "primary_dfs_endpoint" {
   description = "The primary Data Lake Storage Gen2 (DFS) endpoint URL."
   value       = try(rest_resource.storage_account.output.properties.primaryEndpoints.dfs, null)
 }
+
+output "primary_web_endpoint" {
+  description = "The primary static website endpoint URL (requires static website feature enabled)."
+  value       = try(rest_resource.storage_account.output.properties.primaryEndpoints.web, null)
+}
+
+output "primary_microsoft_blob_endpoint" {
+  description = "The primary Blob endpoint routed through the Microsoft network (when publish_microsoft_endpoints = true)."
+  value       = try(rest_resource.storage_account.output.properties.primaryEndpoints.microsoftEndpoints.blob, null)
+}
+
+output "primary_internet_blob_endpoint" {
+  description = "The primary Blob endpoint routed through the internet (when publish_internet_endpoints = true)."
+  value       = try(rest_resource.storage_account.output.properties.primaryEndpoints.internetEndpoints.blob, null)
+}
+
+output "secondary_blob_endpoint" {
+  description = "The secondary Blob service endpoint URL (available for GRS and RAGRS accounts)."
+  value       = try(rest_resource.storage_account.output.properties.secondaryEndpoints.blob, null)
+}
+
+output "secondary_dfs_endpoint" {
+  description = "The secondary DFS endpoint URL (available for ADLS Gen2 GRS/RAGRS accounts)."
+  value       = try(rest_resource.storage_account.output.properties.secondaryEndpoints.dfs, null)
+}
+
+output "identity_principal_id" {
+  description = "The Principal ID of the system-assigned managed identity (null when identity_type = None or no identity)."
+  value       = try(rest_resource.storage_account.output.identity.principalId, null)
+}
+
+output "identity_tenant_id" {
+  description = "The Tenant ID of the system-assigned managed identity."
+  value       = try(rest_resource.storage_account.output.identity.tenantId, null)
+}

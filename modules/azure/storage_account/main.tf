@@ -44,6 +44,19 @@ locals {
     ]
   } : null
 
+  # routing preference block
+  routing_preference = var.routing_preference != null ? {
+    routingChoice             = var.routing_preference.routing_choice
+    publishMicrosoftEndpoints = var.routing_preference.publish_microsoft_endpoints
+    publishInternetEndpoints  = var.routing_preference.publish_internet_endpoints
+  } : null
+
+  # SAS expiration policy block
+  sas_policy = var.sas_policy != null ? {
+    sasExpirationPeriod = var.sas_policy.sas_expiration_period
+    expirationAction    = var.sas_policy.expiration_action
+  } : null
+
   # properties sub-object — only include explicitly set values
   properties = merge(
     { supportsHttpsTrafficOnly = var.https_traffic_only_enabled },
@@ -55,6 +68,20 @@ locals {
     var.public_network_access != null ? { publicNetworkAccess = var.public_network_access } : {},
     var.default_to_oauth_authentication != null ? { defaultToOAuthAuthentication = var.default_to_oauth_authentication } : {},
     var.allow_cross_tenant_replication != null ? { allowCrossTenantReplication = var.allow_cross_tenant_replication } : {},
+    var.large_file_shares_state != null ? { largeFileSharesState = var.large_file_shares_state } : {},
+    var.dns_endpoint_type != null ? { dnsEndpointType = var.dns_endpoint_type } : {},
+    var.is_sftp_enabled != null ? { isSftpEnabled = var.is_sftp_enabled } : {},
+    var.is_local_user_enabled != null ? { isLocalUserEnabled = var.is_local_user_enabled } : {},
+    var.is_nfs_v3_enabled != null ? { isNfsV3Enabled = var.is_nfs_v3_enabled } : {},
+    var.enable_extended_groups != null ? { enableExtendedGroups = var.enable_extended_groups } : {},
+    var.immutable_storage_with_versioning_enabled != null ? { immutableStorageWithVersioning = {
+      enabled = var.immutable_storage_with_versioning_enabled
+    } } : {},
+    var.key_expiration_period_in_days != null ? { keyPolicy = {
+      keyExpirationPeriodInDays = var.key_expiration_period_in_days
+    } } : {},
+    local.routing_preference != null ? { routingPreference = local.routing_preference } : {},
+    local.sas_policy != null ? { sasPolicy = local.sas_policy } : {},
     local.network_acls != null ? { networkAcls = local.network_acls } : {},
     local.encryption != null ? { encryption = local.encryption } : {},
   )
@@ -122,7 +149,29 @@ resource "rest_resource" "storage_account" {
     "properties.primaryEndpoints.queue",
     "properties.primaryEndpoints.table",
     "properties.primaryEndpoints.dfs",
+    "properties.primaryEndpoints.web",
+    "properties.primaryEndpoints.microsoftEndpoints.blob",
+    "properties.primaryEndpoints.microsoftEndpoints.file",
+    "properties.primaryEndpoints.microsoftEndpoints.queue",
+    "properties.primaryEndpoints.microsoftEndpoints.table",
+    "properties.primaryEndpoints.microsoftEndpoints.dfs",
+    "properties.primaryEndpoints.microsoftEndpoints.web",
+    "properties.primaryEndpoints.internetEndpoints.blob",
+    "properties.primaryEndpoints.internetEndpoints.file",
+    "properties.primaryEndpoints.internetEndpoints.web",
+    "properties.secondaryEndpoints.blob",
+    "properties.secondaryEndpoints.file",
+    "properties.secondaryEndpoints.queue",
+    "properties.secondaryEndpoints.table",
+    "properties.secondaryEndpoints.dfs",
+    "identity.principalId",
+    "identity.tenantId",
     "type",
+  ])
+
+  force_new_attrs = toset([
+    "properties.isHnsEnabled",
+    "properties.isNfsV3Enabled",
   ])
 
   # Name availability pre-check — fail with a clear message before the PUT.

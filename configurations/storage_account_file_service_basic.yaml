@@ -1,0 +1,38 @@
+# Storage Account File Service — Basic Configuration
+#
+# Configures file service settings (share soft delete, SMB hardening)
+# on an existing storage account.
+#
+# Prerequisites:
+#   - A storage account must already exist (managed in this or another config)
+#   - export TF_VAR_access_token=$(az account get-access-token \
+#       --resource https://management.azure.com --query accessToken -o tsv)
+#   - TF_VAR_config_file=configurations/storage_account_file_service_basic.yaml terraform apply
+
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+azure_storage_account_file_services:
+  app_files:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: mystorageaccount
+
+    # Share soft delete — 7 day retention
+    share_delete_retention_policy:
+      enabled: true
+      days: 7
+
+    # SMB hardening — restrict to modern, secure protocol versions and encryption
+    smb_versions:
+      - SMB3.0
+      - SMB3.1.1
+    smb_authentication_methods:
+      - Kerberos
+    smb_kerberos_ticket_encryption:
+      - AES-256
+    smb_channel_encryption:
+      - AES-128-GCM
+      - AES-256-GCM

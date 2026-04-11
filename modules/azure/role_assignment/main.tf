@@ -32,10 +32,10 @@ locals {
 }
 
 resource "rest_resource" "role_assignment" {
-  path             = local.ra_path
-  create_method    = "PUT"
-  check_existance  = var.check_existance
-  auth_ref         = var.auth_ref
+  path            = local.ra_path
+  create_method   = "PUT"
+  check_existance = var.check_existance
+  auth_ref        = var.auth_ref
 
   query = {
     api-version = [local.api_version]

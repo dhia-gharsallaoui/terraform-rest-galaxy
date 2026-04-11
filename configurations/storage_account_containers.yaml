@@ -1,0 +1,66 @@
+# Storage account with multiple blob containers demonstrating all container properties.
+# Shows: public access levels, metadata, encryption scope overrides, NFS squash settings.
+#
+# Authentication:
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+
+terraform_backend:
+  type: local
+  path: storage_account_containers.tfstate
+
+azure_resource_groups:
+  containers:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-containers
+    location: westeurope
+    tags:
+      environment: dev
+      managed_by: terraform-rest
+
+azure_storage_accounts:
+  containers:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-containers
+    account_name: stcontainers001             # 3-24 lowercase alphanumeric, globally unique
+    sku_name: Standard_LRS
+    kind: StorageV2
+    location: westeurope
+    allow_blob_public_access: true            # required for public containers below
+    tags:
+      environment: dev
+
+azure_storage_account_containers:
+  # Private container with metadata — default, no public access
+  private:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-containers
+    account_name: stcontainers001
+    container_name: private-data
+    public_access: None
+    metadata:
+      team: platform
+      environment: dev
+      purpose: internal-data
+
+  # Public blob container — individual blobs readable anonymously
+  public-blobs:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-containers
+    account_name: stcontainers001
+    container_name: public-assets
+    public_access: Blob
+    metadata:
+      purpose: static-assets
+
+  # Container with custom encryption scope (requires scope on account)
+  encrypted:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-containers
+    account_name: stcontainers001
+    container_name: encrypted-data
+    public_access: None
+    default_encryption_scope: my-scope       # name of an encryption scope on the account
+    deny_encryption_scope_override: true     # prevent per-blob scope override
+    metadata:
+      compliance: high

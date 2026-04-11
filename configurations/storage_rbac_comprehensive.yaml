@@ -1,0 +1,347 @@
+# Storage platform — comprehensive RBAC from Entra ID groups
+#
+# This configuration demonstrates fine-grained Azure RBAC across every storage
+# resource type that supports role-based access control.
+#
+# Built-in role definitions are resolved at plan time via externals —
+# no GUIDs hardcoded in this file. The externals block at the bottom declares
+# which built-in roles to look up; the resolved IDs are then referenced with
+#   ref:externals.azure_role_definitions.<key>.id
+#
+# Three Entra ID security groups are created:
+#   - platform-engineers  : full data-plane write access to all resources
+#   - platform-readers    : read-only access to blobs, SMB shares, tables
+#   - ci-runners          : targeted write access for queue + ACR operations
+#
+# Scope notes
+# -----------
+# azure_role_assignments resolves at Layer 2 context, so scopes are limited to
+# resources available at L2 or earlier in the ref: resolution chain:
+#
+#   ✅ ref:azure_resource_groups.*      → L0b — always available
+#   ✅ ref:azure_key_vaults.*           → L1   — available
+#   ✅ ref:azure_container_registries.* → L2   — available
+#   ❌ ref:azure_storage_accounts.*     → L3   — not yet resolved at L2
+#   ❌ ref:azure_storage_account_containers.* → terminal, not in context
+#
+# Storage RBAC is therefore scoped at the *resource group* level, which covers
+# all storage accounts (and sub-resources) within it. This is the standard
+# pattern for platform-wide access.
+#
+# For per-container/queue/table/share scoping, provide the ARM ID directly:
+#   scope: /subscriptions/.../resourceGroups/.../providers/Microsoft.Storage/
+#          storageAccounts/stplatformrbac001/blobServices/default/containers/raw-data
+#
+# Note: the externals.azure_role_definitions block resolves built-in role definition
+# IDs via live ARM API calls at plan time. A real access_token is required —
+# plans with a placeholder token will fail with "key not found: id". This is
+# expected offline behavior. See k8s_arc_enrollment.yaml for the same pattern.
+#
+# Prerequisites:
+#   export TF_VAR_access_token=$(az account get-access-token \
+#     --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_graph_access_token=$(az account get-access-token \
+#     --resource https://graph.microsoft.com --query accessToken -o tsv)
+#   TF_VAR_config_file=configurations/storage_rbac_comprehensive.yaml terraform apply
+
+# ── State backend ─────────────────────────────────────────────────────────────
+terraform_backend:
+  type: local
+  path: storage_rbac_comprehensive.tfstate
+
+# ── Resource group ─────────────────────────────────────────────────────────────
+azure_resource_groups:
+  platform:
+    resource_group_name: rg-platform-rbac
+    location: westeurope
+
+# ── Storage account ────────────────────────────────────────────────────────────
+azure_storage_accounts:
+  platform:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: stplatformrbac001
+    location: ref:azure_resource_groups.platform.location
+    sku_name: Standard_LRS
+    kind: StorageV2
+    # Disable public access — all access via Entra ID RBAC
+    allow_blob_public_access: false
+    default_to_oauth_authentication: true
+
+# ── Blob containers ────────────────────────────────────────────────────────────
+azure_storage_account_containers:
+  raw_data:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: ref:azure_storage_accounts.platform.account_name
+    container_name: raw-data
+    public_access: None
+
+  processed_data:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: ref:azure_storage_accounts.platform.account_name
+    container_name: processed-data
+    public_access: None
+
+# ── File share ─────────────────────────────────────────────────────────────────
+azure_storage_account_file_shares:
+  shared_configs:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: ref:azure_storage_accounts.platform.account_name
+    share_name: shared-configs
+    share_quota: 50
+    enabled_protocols: SMB
+
+# ── Queues ─────────────────────────────────────────────────────────────────────
+azure_storage_account_queues:
+  job_requests:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: ref:azure_storage_accounts.platform.account_name
+    queue_name: job-requests
+
+  job_results:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: ref:azure_storage_accounts.platform.account_name
+    queue_name: job-results
+
+# ── Table ──────────────────────────────────────────────────────────────────────
+azure_storage_account_tables:
+  job_metadata:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    account_name: ref:azure_storage_accounts.platform.account_name
+    table_name: JobMetadata
+
+# ── Key vault (RBAC mode — no access policies) ────────────────────────────────
+azure_key_vaults:
+  platform:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    vault_name: kv-platform-rbac-001
+    location: ref:azure_resource_groups.platform.location
+    sku_name: standard
+    enable_rbac_authorization: true  # RBAC mode — access policies are ignored
+    soft_delete_retention_in_days: 90
+
+# ── Container registry (admin disabled — RBAC only) ──────────────────────────
+azure_container_registries:
+  platform:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    registry_name: crplatformrbac001
+    location: ref:azure_resource_groups.platform.location
+    sku: Standard
+    admin_user_enabled: false  # Enforce RBAC-only access
+
+# ── User-assigned identity (AKS pod identity / workload identity) ─────────────
+# UAIs resolve at Layer 1 — principal_id is available for ref: in role assignments.
+# In AKS, this identity is federated to a Kubernetes service account via
+# azure_federated_identity_credentials, giving pods token-based blob access
+# without any credentials in the pod spec.
+azure_user_assigned_identities:
+  aks_blob_reader:
+    resource_group_name: ref:azure_resource_groups.platform.resource_group_name
+    identity_name: id-aks-blob-reader
+    location: ref:azure_resource_groups.platform.location
+
+# ── Entra ID security groups ───────────────────────────────────────────────────
+entraid_groups:
+  # Full data-plane write access across all resources
+  platform_engineers:
+    display_name: tf-platform-engineers
+    mail_enabled: false
+    mail_nickname: tf-platform-engineers
+    security_enabled: true
+    description: "Platform engineers — full data-plane access to storage, key vault, and container registry"
+
+  # Read-only access for analysts / reporting pipelines
+  platform_readers:
+    display_name: tf-platform-readers
+    mail_enabled: false
+    mail_nickname: tf-platform-readers
+    security_enabled: true
+    description: "Platform readers — read-only data-plane access to blob, SMB, table"
+
+  # CI/CD pipelines — targeted access for queue messaging + image publishing
+  ci_runners:
+    display_name: tf-ci-runners
+    mail_enabled: false
+    mail_nickname: tf-ci-runners
+    security_enabled: true
+    description: "CI runners — queue message sender + ACR push access"
+
+# ── Role assignments ───────────────────────────────────────────────────────────
+# All role_definition_id values use ref:externals.azure_role_definitions.<key>.id
+# — no GUIDs are hardcoded. The externals block at the bottom resolves them.
+
+azure_role_assignments:
+
+  # ── Storage (scoped at resource group — covers all storage services in RG) ──
+
+  # Storage Blob Data Contributor — read/write/delete blobs + manage containers
+  engineers_blob_contributor:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_blob_contributor.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — Blob Data Contributor on platform RG"
+
+  # Storage Blob Data Reader — read blobs, list containers (no write/delete)
+  readers_blob_reader:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_blob_reader.id
+    principal_id: ref:entraid_groups.platform_readers.id
+    principal_type: Group
+    description: "Platform readers — Blob Data Reader on platform RG"
+
+  # Storage File Data SMB Share Contributor — read/write/delete files and directories via SMB
+  engineers_smb_contributor:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_smb_contributor.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — SMB Share Contributor on platform RG"
+
+  # Storage File Data SMB Share Reader — read files and list directories via SMB
+  readers_smb_reader:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_smb_reader.id
+    principal_id: ref:entraid_groups.platform_readers.id
+    principal_type: Group
+    description: "Platform readers — SMB Share Reader on platform RG"
+
+  # Storage Queue Data Contributor — enqueue, dequeue, peek, delete messages + manage queues
+  engineers_queue_contributor:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_queue_contributor.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — Queue Data Contributor on platform RG"
+
+  # Storage Queue Data Message Sender — enqueue only (post new messages to queues)
+  ci_queue_sender:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_queue_sender.id
+    principal_id: ref:entraid_groups.ci_runners.id
+    principal_type: Group
+    description: "CI runners — Queue Message Sender on platform RG"
+
+  # Storage Queue Data Message Processor — dequeue, peek, delete messages
+  engineers_queue_processor:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_queue_processor.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — Queue Message Processor on platform RG"
+
+  # Storage Table Data Contributor — read/write/delete table entities + manage tables
+  engineers_table_contributor:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_table_contributor.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — Table Data Contributor on platform RG"
+
+  # Storage Table Data Reader — read table entities (no write/delete)
+  readers_table_reader:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_table_reader.id
+    principal_id: ref:entraid_groups.platform_readers.id
+    principal_type: Group
+    description: "Platform readers — Table Data Reader on platform RG"
+
+  # ── AKS pod identity (user-assigned managed identity) ────────────────────────
+  # Storage Blob Data Reader — AKS workload reads blobs via Workload Identity.
+  # The UAI's principal_id is its service principal object ID in Entra ID.
+  # Wire it to a Kubernetes service account with azure_federated_identity_credentials
+  # to enable token-based access without any secrets in the pod spec.
+  aks_blob_reader:
+    scope: ref:azure_resource_groups.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.storage_blob_reader.id
+    principal_id: ref:azure_user_assigned_identities.aks_blob_reader.principal_id
+    principal_type: ServicePrincipal  # UAIs are represented as service principals in RBAC
+    description: "AKS pod identity — Blob Data Reader for workload identity on platform RG"
+
+  # ── Key vault (scoped at vault level — fine-grained access) ──────────────────
+
+  # Key Vault Secrets User — get + list secrets (consume, no write/delete)
+  engineers_kv_secrets_user:
+    scope: ref:azure_key_vaults.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.kv_secrets_user.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — KV Secrets User (read secrets)"
+
+  # Key Vault Crypto User — use keys for encrypt/decrypt/sign/verify (no key export)
+  engineers_kv_crypto_user:
+    scope: ref:azure_key_vaults.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.kv_crypto_user.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — KV Crypto User (encrypt/decrypt with managed keys)"
+
+  # Key Vault Reader — list vault metadata and policies (no secret values)
+  readers_kv_reader:
+    scope: ref:azure_key_vaults.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.kv_reader.id
+    principal_id: ref:entraid_groups.platform_readers.id
+    principal_type: Group
+    description: "Platform readers — KV Reader (list vault metadata only)"
+
+  # ── Container registry (scoped at registry level) ────────────────────────────
+
+  # AcrPull — pull images (read-only registry access for running workloads)
+  engineers_acr_pull:
+    scope: ref:azure_container_registries.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.acr_pull.id
+    principal_id: ref:entraid_groups.platform_engineers.id
+    principal_type: Group
+    description: "Platform engineers — AcrPull on platform registry"
+
+  readers_acr_pull:
+    scope: ref:azure_container_registries.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.acr_pull.id
+    principal_id: ref:entraid_groups.platform_readers.id
+    principal_type: Group
+    description: "Platform readers — AcrPull on platform registry"
+
+  # AcrPush — push + pull images (CI pipelines build and publish)
+  ci_acr_push:
+    scope: ref:azure_container_registries.platform.id
+    role_definition_id: ref:externals.azure_role_definitions.acr_push.id
+    principal_id: ref:entraid_groups.ci_runners.id
+    principal_type: Group
+    description: "CI runners — AcrPush on platform registry (build pipeline)"
+
+# ── Externals — built-in role definition lookups ──────────────────────────────
+# These are read-only GET calls at plan time — no resources are created.
+# The resolved `id` attribute is the full ARM resource ID of the role definition,
+# ready for use in role_definition_id fields via ref:externals.azure_role_definitions.*
+externals:
+  azure_role_definitions:
+    # ── Storage ──
+    storage_blob_contributor:
+      role_name: "Storage Blob Data Contributor"
+    storage_blob_reader:
+      role_name: "Storage Blob Data Reader"
+    storage_smb_contributor:
+      role_name: "Storage File Data SMB Share Contributor"
+    storage_smb_reader:
+      role_name: "Storage File Data SMB Share Reader"
+    storage_queue_contributor:
+      role_name: "Storage Queue Data Contributor"
+    storage_queue_sender:
+      role_name: "Storage Queue Data Message Sender"
+    storage_queue_processor:
+      role_name: "Storage Queue Data Message Processor"
+    storage_table_contributor:
+      role_name: "Storage Table Data Contributor"
+    storage_table_reader:
+      role_name: "Storage Table Data Reader"
+    # ── Key vault ──
+    kv_secrets_user:
+      role_name: "Key Vault Secrets User"
+    kv_crypto_user:
+      role_name: "Key Vault Crypto User"
+    kv_reader:
+      role_name: "Key Vault Reader"
+    # ── Container registry ──
+    acr_pull:
+      role_name: "AcrPull"
+    acr_push:
+      role_name: "AcrPush"

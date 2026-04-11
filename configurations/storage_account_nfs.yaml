@@ -1,0 +1,61 @@
+# Storage account for NFS v3 + ADLS Gen2 + SFTP scenario.
+# Demonstrates hierarchical namespace, NFS v3, local user SFTP access,
+# and private networking with a virtual network rule.
+#
+# Authentication:
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+
+terraform_backend:
+  type: local
+  path: storage_account_nfs.tfstate
+
+azure_resource_groups:
+  nfs:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-nfs
+    location: westeurope
+    tags:
+      environment: dev
+      managed_by: terraform-rest
+      scenario: nfs-adls-sftp
+
+azure_storage_accounts:
+  nfs:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-nfs
+    account_name: stnfsdatalake001          # 3-24 lowercase alphanumeric, globally unique
+    sku_name: Standard_LRS
+    kind: StorageV2
+    location: westeurope
+    tags:
+      environment: dev
+      scenario: nfs-adls-sftp
+
+    # ADLS Gen2 — required for NFS v3 and SFTP
+    is_hns_enabled: true                    # IMMUTABLE: cannot be changed after creation
+
+    # NFS v3 — blob storage accessible via NFS v3 protocol
+    is_nfs_v3_enabled: true                 # IMMUTABLE: cannot be changed after creation
+
+    # SFTP support — SSH File Transfer Protocol over blob storage
+    is_local_user_enabled: true
+    is_sftp_enabled: true
+    enable_extended_groups: true            # support more than 16 groups per local user
+
+    # Security baseline
+    https_traffic_only_enabled: true
+    minimum_tls_version: TLS1_2
+    allow_blob_public_access: false
+    allow_shared_key_access: false
+    default_to_oauth_authentication: true
+    public_network_access: Enabled
+
+    # NFS requires a virtual network rule — replace subnet ID with your actual subnet
+    network_acls:
+      default_action: Deny
+      bypass:
+        - AzureServices
+      ip_rules: []
+      virtual_network_subnet_ids:
+        - "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-vnet/providers/Microsoft.Network/virtualNetworks/vnet-main/subnets/snet-storage"

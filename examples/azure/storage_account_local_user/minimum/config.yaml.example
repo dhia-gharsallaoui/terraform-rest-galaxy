@@ -1,0 +1,15 @@
+default_location: westeurope
+
+# Parent storage account must already exist with HNS + SFTP + local user enabled.
+# This example demonstrates the minimum required fields for a blob-scoped SFTP user.
+
+azure_storage_account_local_users:
+  sftp-upload:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-data
+    account_name:        mydatalake001
+    username:            sftp-upload
+    permission_scopes:
+      - service:       blob
+        resource_name: uploads
+        permissions:   rwdl

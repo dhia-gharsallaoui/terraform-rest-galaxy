@@ -1,0 +1,33 @@
+# Storage account encryption scopes configuration.
+# Demonstrates both platform-managed and customer-managed key encryption scopes.
+#
+# Prerequisites:
+#   - The storage account must already exist
+#   - For the CMK scope: a Key Vault and key must exist, and the storage account's
+#     managed identity must have the "Key Vault Crypto User" role on the key vault
+
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+azure_storage_account_encryption_scopes:
+  # Platform-managed key encryption scope (Microsoft-managed keys)
+  platform:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-prod
+    account_name: mystorageaccount
+    encryption_scope_name: platscope
+    encryption_source: Microsoft.Storage
+    state: Enabled
+
+  # Customer-managed key encryption scope with infrastructure double-encryption
+  cmk:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-prod
+    account_name: mystorageaccount
+    encryption_scope_name: cmkscope
+    encryption_source: Microsoft.KeyVault
+    key_vault_key_uri: "https://myvault.vault.azure.net/keys/mykey/abc123"
+    require_infrastructure_encryption: true
+    state: Enabled

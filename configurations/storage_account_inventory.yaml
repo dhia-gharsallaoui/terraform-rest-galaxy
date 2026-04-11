@@ -1,0 +1,87 @@
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+# Blob inventory policy with multiple rules:
+#   - Weekly blob inventory in Parquet format (rich schema)
+#   - Daily blob inventory in CSV format (lightweight monitoring)
+#   - Weekly container inventory in CSV format
+
+azure_resource_groups:
+  inventory:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-inventory-demo
+    location:            westeurope
+    tags:
+      environment: demo
+      managed_by:  terraform
+
+azure_storage_accounts:
+  datalake:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.inventory.resource_group_name
+    account_name:        stinvdemo001
+    sku_name:            Standard_LRS
+    kind:                StorageV2
+    location:            ref:azure_resource_groups.inventory.location
+    is_hns_enabled:      true
+    allow_blob_public_access: false
+    minimum_tls_version: TLS1_2
+    tags:                ref:azure_resource_groups.inventory.tags
+
+azure_storage_account_inventory_policies:
+  datalake-inventory:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.inventory.resource_group_name
+    account_name:        ref:azure_storage_accounts.datalake.name
+    rules:
+      - name:                  weekly-blob-parquet
+        enabled:               true
+        destination:           inventory-reports
+        schedule:              Weekly
+        object_type:           Blob
+        format:                Parquet
+        include_snapshots:     false
+        include_blob_versions: false
+        blob_types:
+          - blockBlob
+        prefix_match:
+          - data/2024/
+          - data/2025/
+        schema_fields:
+          - Name
+          - Creation-Time
+          - Last-Modified
+          - Content-Length
+          - BlobType
+          - AccessTier
+          - Etag
+          - ContentType
+
+      - name:        daily-blob-csv
+        enabled:     true
+        destination: inventory-reports
+        schedule:    Daily
+        object_type: Blob
+        format:      Csv
+        blob_types:
+          - blockBlob
+        schema_fields:
+          - Name
+          - Last-Modified
+          - BlobType
+          - AccessTier
+
+      - name:        weekly-container-csv
+        enabled:     true
+        destination: inventory-reports
+        schedule:    Weekly
+        object_type: Container
+        format:      Csv
+        schema_fields:
+          - Name
+          - Last-Modified
+          - PublicAccess
+          - LeaseStatus
+          - HasImmutabilityPolicy

@@ -1,0 +1,39 @@
+# Storage Account File Shares
+#
+# This configuration creates two file shares inside an existing storage account:
+#   - An SMB share with metadata and access tier configuration
+#   - An NFS share with root squash enabled
+#
+# Prerequisites:
+#   - A storage account must exist (managed separately or via azure_storage_accounts)
+#   - For NFS shares: the storage account must have is_nfs_v3_enabled = true or
+#     is_hns_enabled = true with FileStorage kind
+#
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   TF_VAR_config_file=configurations/storage_account_file_shares.yaml terraform apply
+
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+azure_storage_account_file_shares:
+  smb_share:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    share_name: data-share
+    share_quota: 512
+    access_tier: Hot
+    enabled_protocols: SMB
+    metadata:
+      environment: production
+      team: platform
+  nfs_share:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    share_name: nfs-share
+    share_quota: 1024
+    enabled_protocols: NFS
+    root_squash: RootSquash

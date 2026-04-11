@@ -1,0 +1,32 @@
+# Storage Account File Share — complete configuration example
+# Demonstrates all configurable properties including metadata and signed identifiers.
+# Usage: TF_VAR_config_file=config.yaml terraform apply
+
+default_location: westeurope
+
+azure_storage_account_file_shares:
+  complete:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    share_name: completeshare
+    share_quota: 512
+    access_tier: Hot
+    enabled_protocols: SMB
+    metadata:
+      environment: production
+      team: platform
+    signed_identifiers:
+      - id: readonly
+        access_policy:
+          start_time: "2025-01-01T00:00:00Z"
+          expiry_time: "2026-01-01T00:00:00Z"
+          permission: r
+  nfs_share:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    share_name: nfsshare
+    share_quota: 1024
+    enabled_protocols: NFS
+    root_squash: RootSquash

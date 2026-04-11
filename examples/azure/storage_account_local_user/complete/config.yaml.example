@@ -1,0 +1,23 @@
+default_location: westeurope
+
+# Full example — all supported fields for a local SFTP/NFSv3 user.
+# Demonstrates multi-scope access with SSH key authentication and home directory.
+
+azure_storage_account_local_users:
+  sftp-power-user:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-data
+    account_name:        mydatalake001
+    username:            sftp-power-user
+    permission_scopes:
+      - service:       blob
+        resource_name: uploads
+        permissions:   rwdlc
+      - service:       file
+        resource_name: fileshare1
+        permissions:   rwdl
+    home_directory:          uploads/home
+    allow_acl_authorization: false
+    ssh_authorized_keys:
+      - description: my-workstation-key
+        key: "ssh-rsa AAAA..."

@@ -1,22 +1,35 @@
-# Complete storage account configuration (all attributes).
+# Complete storage account configuration — all attributes exercised.
 # Authentication — supply via environment variables:
 #   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
 #   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
-#   export TF_VAR_config_file=config.yaml
-#   terraform init && terraform apply  (from repo root)
 
-storage_accounts:
+terraform_backend:
+  type: local
+  path: storage_account_complete.tfstate
+
+azure_resource_groups:
   complete:
     subscription_id: "00000000-0000-0000-0000-000000000000"
-    resource_group_name: rg-myapp-prod
-    account_name: mystorageacctprod  # optional: omit to use naming convention (name_unique)
+    resource_group_name: rg-storage-complete
+    location: westeurope
+    tags:
+      environment: production
+      managed_by: terraform-rest
+
+azure_storage_accounts:
+  complete:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-complete
+    account_name: mystorageacctprod          # 3-24 lowercase alphanumeric, globally unique
     sku_name: Standard_LRS
     kind: StorageV2
-    location: westeurope             # optional: omit to use var.naming.location
+    location: westeurope
     tags:
       environment: production
       team: platform
       cost_center: "12345"
+
+    # Security
     https_traffic_only_enabled: true
     minimum_tls_version: TLS1_2
     allow_blob_public_access: false
@@ -24,3 +37,41 @@ storage_accounts:
     public_network_access: Enabled
     default_to_oauth_authentication: true
     allow_cross_tenant_replication: false
+
+    # Features
+    large_file_shares_state: Enabled        # up to 100 TiB file shares
+    dns_endpoint_type: Standard             # or AzureDnsZone for partitioned DNS
+
+    # SAS policy — warn when SAS tokens exceed 7 days
+    sas_policy:
+      sas_expiration_period: "7.00:00:00"   # ISO 8601: 7 days
+      expiration_action: Log                 # Log or Block
+
+    # Key rotation policy — expire access keys after 90 days
+    key_expiration_period_in_days: 90
+
+    # Network ACLs — restrict to specific IPs + Azure services
+    network_acls:
+      default_action: Deny
+      bypass:
+        - AzureServices
+        - Logging
+        - Metrics
+      ip_rules:
+        - "203.0.113.0/24"
+      virtual_network_subnet_ids: []
+
+    # Routing — publish Microsoft network endpoints
+    routing_preference:
+      routing_choice: MicrosoftRouting
+      publish_microsoft_endpoints: true
+      publish_internet_endpoints: false
+
+    # Managed identity — system-assigned for use with CMK
+    identity_type: SystemAssigned
+
+    # Customer-managed key (requires Key Vault + UAI configured separately)
+    # encryption_key_source: Microsoft.Keyvault
+    # encryption_key_vault_uri: "https://myvault.vault.azure.net/"
+    # encryption_key_name: storage-cmk
+    # encryption_require_infrastructure_encryption: true

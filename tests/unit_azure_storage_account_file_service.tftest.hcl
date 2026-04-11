@@ -1,0 +1,1 @@
+unit_tests/azure/unit_azure_storage_account_file_service.tftest.hcl

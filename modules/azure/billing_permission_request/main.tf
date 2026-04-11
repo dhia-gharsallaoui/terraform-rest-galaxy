@@ -29,10 +29,10 @@ locals {
 resource "rest_resource" "billing_permission_request" {
   count = var.provisioning_billing_request_id != null ? 1 : 0
 
-  path             = local.path
-  create_method    = "PUT"
-  delete_method    = "PUT"
-  auth_ref         = var.auth_ref
+  path          = local.path
+  create_method = "PUT"
+  delete_method = "PUT"
+  auth_ref      = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -75,10 +75,10 @@ resource "rest_resource" "billing_permission_request" {
 resource "rest_resource" "billing_request_approval" {
   count = var.billing_request_id != null ? 1 : 0
 
-  path             = "/providers/Microsoft.Billing/billingRequests/${var.billing_request_id}"
-  create_method    = "PUT"
-  delete_method    = "PUT"
-  auth_ref         = var.auth_ref
+  path          = "/providers/Microsoft.Billing/billingRequests/${var.billing_request_id}"
+  create_method = "PUT"
+  delete_method = "PUT"
+  auth_ref      = var.auth_ref
 
   query = {
     api-version = ["2024-04-01"]

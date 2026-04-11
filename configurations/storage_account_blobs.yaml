@@ -1,0 +1,50 @@
+---
+# Storage Account Blobs — data-plane blob management
+#
+# Prerequisites:
+#   1. A storage account must exist (managed by azure_storage_accounts or externally).
+#   2. A blob container must exist (managed by azure_storage_account_containers or externally).
+#   3. Set var.storage_account_name to the target account.
+#   4. Set var.storage_access_token (scope: https://storage.azure.com/.default):
+#        export TF_VAR_storage_access_token=$(az account get-access-token \
+#          --resource https://storage.azure.com --query accessToken -o tsv)
+#        export TF_VAR_storage_account_name=mystorageaccount
+#
+# All blobs in this file must belong to the same storage account (var.storage_account_name).
+#
+# Run:
+#   terraform apply -var config_file=configurations/storage_account_blobs.yaml
+
+terraform_backend:
+  type: local
+
+azure_storage_account_blobs:
+  app_config:
+    account_name:   mystorageaccount
+    container_name: app-configs
+    blob_name:      production/config.json
+    content_type:   application/json
+    content:        '{"environment":"production","debug":false,"version":"1.0.0"}'
+    access_tier:    Hot
+    metadata:
+      team:        platform
+      environment: production
+      managed-by:  terraform
+
+  feature_flags:
+    account_name:   mystorageaccount
+    container_name: app-configs
+    blob_name:      production/feature-flags.json
+    content_type:   application/json
+    content:        '{"new_ui":true,"dark_mode":false,"beta_api":false}'
+    access_tier:    Hot
+
+  readme:
+    account_name:   mystorageaccount
+    container_name: app-configs
+    blob_name:      README.md
+    content_type:   text/plain
+    content:        "This container holds application configuration files managed by Terraform."
+    access_tier:    Cool
+    metadata:
+      description: container documentation

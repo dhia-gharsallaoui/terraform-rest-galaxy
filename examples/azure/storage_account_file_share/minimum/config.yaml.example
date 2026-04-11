@@ -1,0 +1,16 @@
+# Storage Account File Share — minimum configuration example
+# Usage: TF_VAR_config_file=config.yaml terraform apply
+#
+# Prerequisites:
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+
+default_location: westeurope
+
+azure_storage_account_file_shares:
+  minimum:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    share_name: myshare
+    share_quota: 100

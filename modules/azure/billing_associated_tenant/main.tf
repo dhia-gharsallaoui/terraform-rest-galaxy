@@ -20,10 +20,10 @@ locals {
 
 # ── Pre-check: verify caller has write permission on associatedTenants ──────
 resource "rest_operation" "check_access" {
-  count            = var.precheck_access ? 1 : 0
-  path             = "/providers/Microsoft.Billing/billingAccounts/${var.billing_account_name}/checkAccess"
-  method           = "POST"
-  auth_ref         = var.auth_ref
+  count    = var.precheck_access ? 1 : 0
+  path     = "/providers/Microsoft.Billing/billingAccounts/${var.billing_account_name}/checkAccess"
+  method   = "POST"
+  auth_ref = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -55,10 +55,10 @@ locals {
 # ─────────────────────────────────────────────────────────────────────────────
 
 resource "rest_resource" "billing_associated_tenant" {
-  path             = local.path
-  create_method    = "PUT"
-  check_existance  = var.check_existance
-  auth_ref         = var.auth_ref
+  path            = local.path
+  create_method   = "PUT"
+  check_existance = var.check_existance
+  auth_ref        = var.auth_ref
 
   query = {
     api-version = [local.api_version]

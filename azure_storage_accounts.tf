@@ -33,6 +33,23 @@ variable "azure_storage_accounts" {
     encryption_key_version                       = optional(string, null)
     encryption_identity                          = optional(string, null)
     encryption_require_infrastructure_encryption = optional(bool, null)
+    large_file_shares_state                      = optional(string, null)
+    routing_preference = optional(object({
+      routing_choice              = optional(string, "MicrosoftRouting")
+      publish_microsoft_endpoints = optional(bool, false)
+      publish_internet_endpoints  = optional(bool, false)
+    }), null)
+    sas_policy = optional(object({
+      sas_expiration_period = string
+      expiration_action     = optional(string, "Log")
+    }), null)
+    key_expiration_period_in_days             = optional(number, null)
+    dns_endpoint_type                         = optional(string, null)
+    is_sftp_enabled                           = optional(bool, null)
+    is_local_user_enabled                     = optional(bool, null)
+    is_nfs_v3_enabled                         = optional(bool, null)
+    enable_extended_groups                    = optional(bool, null)
+    immutable_storage_with_versioning_enabled = optional(bool, null)
   }))
   description = <<-EOT
     Map of storage accounts to create or manage. Each map key acts as the for_each
@@ -106,5 +123,15 @@ module "azure_storage_accounts" {
   encryption_key_version                       = try(each.value.encryption_key_version, null)
   encryption_identity                          = try(each.value.encryption_identity, null)
   encryption_require_infrastructure_encryption = try(each.value.encryption_require_infrastructure_encryption, null)
+  large_file_shares_state                      = try(each.value.large_file_shares_state, null)
+  routing_preference                           = try(each.value.routing_preference, null)
+  sas_policy                                   = try(each.value.sas_policy, null)
+  key_expiration_period_in_days                = try(each.value.key_expiration_period_in_days, null)
+  dns_endpoint_type                            = try(each.value.dns_endpoint_type, null)
+  is_sftp_enabled                              = try(each.value.is_sftp_enabled, null)
+  is_local_user_enabled                        = try(each.value.is_local_user_enabled, null)
+  is_nfs_v3_enabled                            = try(each.value.is_nfs_v3_enabled, null)
+  enable_extended_groups                       = try(each.value.enable_extended_groups, null)
+  immutable_storage_with_versioning_enabled    = try(each.value.immutable_storage_with_versioning_enabled, null)
   check_existance                              = var.check_existance
 }

@@ -1,0 +1,14 @@
+# Minimum blob service configuration — applies default blob service settings
+# to an existing storage account.
+#
+# Usage:
+#   TF_VAR_config_file=examples/azure/storage_account_blob_service/minimum/config.yaml.example \
+#   terraform apply
+
+default_location: westeurope
+
+azure_storage_account_blob_services:
+  minimum:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: mystorageaccount

@@ -1,0 +1,54 @@
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+# Object replication policy between two storage accounts.
+# Creates a destination policy — the policyId is auto-assigned by Azure.
+# After apply, use the policy_id output to configure the source account policy.
+
+azure_resource_groups:
+  replication:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-replication-demo
+    location:            westeurope
+    tags:
+      environment: demo
+      managed_by:  terraform
+
+azure_storage_accounts:
+  source:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.replication.resource_group_name
+    account_name:        stsrcdemo001
+    sku_name:            Standard_LRS
+    kind:                StorageV2
+    location:            ref:azure_resource_groups.replication.location
+    allow_blob_public_access: false
+    tags:                ref:azure_resource_groups.replication.tags
+
+  destination:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.replication.resource_group_name
+    account_name:        stdstdemo001
+    sku_name:            Standard_LRS
+    kind:                StorageV2
+    location:            northeurope
+    allow_blob_public_access: false
+    tags:                ref:azure_resource_groups.replication.tags
+
+azure_storage_account_object_replication_policies:
+  prod-to-dr:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.replication.resource_group_name
+    account_name:        ref:azure_storage_accounts.destination.name
+    source_account:      ref:azure_storage_accounts.source.id
+    policy_id:           default
+    metrics_enabled:     true
+    tags_replication_enabled: true
+    rules:
+      - source_container:      raw-data
+        destination_container: replicated-raw
+        min_creation_time:     "2024-01-01T00:00:00Z"
+      - source_container:      processed-data
+        destination_container: replicated-processed

@@ -1,0 +1,11 @@
+# Storage Account Table — minimum configuration example
+# Usage: TF_VAR_config_file=config.yaml terraform apply
+
+default_location: westeurope
+
+azure_storage_account_tables:
+  minimum:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    table_name: MyTable

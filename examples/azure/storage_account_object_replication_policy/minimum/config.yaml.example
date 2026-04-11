@@ -1,0 +1,14 @@
+default_location: westeurope
+
+# Minimum example — creates the destination policy with auto-assigned policyId.
+# Use policy_id = "default" for new policies.
+
+azure_storage_account_object_replication_policies:
+  prod-replication:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-data
+    account_name:        mydestination001
+    source_account:      /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-data/providers/Microsoft.Storage/storageAccounts/mysource001
+    rules:
+      - source_container:      source-data
+        destination_container: replicated-data

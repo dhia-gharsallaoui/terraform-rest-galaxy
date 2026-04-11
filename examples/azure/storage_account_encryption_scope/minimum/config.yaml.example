@@ -1,0 +1,14 @@
+# Root-module equivalent configuration for the minimum example.
+# Drive via: TF_VAR_config_file=config.yaml.example terraform apply
+#
+# Prerequisites: the referenced storage account must already exist.
+
+default_location: westeurope
+
+azure_storage_account_encryption_scopes:
+  minimum:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage
+    account_name: mystorageaccount
+    encryption_scope_name: platscope
+    encryption_source: Microsoft.Storage

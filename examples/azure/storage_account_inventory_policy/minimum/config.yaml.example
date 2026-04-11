@@ -1,0 +1,22 @@
+default_location: westeurope
+
+# Minimum example — one weekly blob inventory rule in Parquet format.
+# The destination container 'inventory-reports' must exist before applying.
+
+azure_storage_account_inventory_policies:
+  weekly-inventory:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-data
+    account_name:        mydatalake001
+    rules:
+      - name:        weekly-blob-inventory
+        destination: inventory-reports
+        schedule:    Weekly
+        object_type: Blob
+        format:      Parquet
+        schema_fields:
+          - Name
+          - Creation-Time
+          - Content-Length
+          - BlobType
+          - AccessTier

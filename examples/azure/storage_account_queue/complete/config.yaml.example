@@ -1,0 +1,21 @@
+# Storage Account Queue — complete configuration example
+# Demonstrates all configurable properties including metadata.
+# Usage: TF_VAR_config_file=config.yaml terraform apply
+
+default_location: westeurope
+
+azure_storage_account_queues:
+  events:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    queue_name: events-queue
+    metadata:
+      environment: production
+      team: platform
+      purpose: event-processing
+  notifications:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    queue_name: notifications

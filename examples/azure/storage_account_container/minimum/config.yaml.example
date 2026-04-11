@@ -1,0 +1,17 @@
+# Minimum blob container configuration.
+# Requires an existing storage account.
+#
+# Authentication:
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+
+terraform_backend:
+  type: local
+  path: storage_account_container_minimum.tfstate
+
+azure_storage_account_containers:
+  mycontainer:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp-prod
+    account_name: mystorageacct001
+    container_name: mycontainer

@@ -1,0 +1,100 @@
+# Data lake lifecycle management policy configuration.
+# Implements a multi-tier lifecycle for a hot → cool → archive → delete pipeline
+# representing a realistic data lake workload.
+#
+# Prerequisites:
+#   - The storage account must already exist (see configurations/storage_account_minimum.yaml)
+#   - Last-access time tracking must be enabled on the storage account
+
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+azure_storage_account_management_policies:
+  datalake:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-datalake-prod
+    account_name: datalakeprod001
+    rules:
+      # Rule 1: Raw ingestion data — tier based on last modification
+      - name: raw-data-lifecycle
+        enabled: true
+        filters:
+          blob_types:
+            - blockBlob
+          prefix_match:
+            - raw/
+            - landing/
+        actions:
+          base_blob:
+            tier_to_cool_after_days_since_modification_greater_than: 30
+            tier_to_archive_after_days_since_modification_greater_than: 180
+            delete_after_days_since_modification_greater_than: 1825  # 5 years
+
+      # Rule 2: Processed/curated data — tier based on last access (needs access tracking)
+      - name: processed-data-lifecycle
+        enabled: true
+        filters:
+          blob_types:
+            - blockBlob
+          prefix_match:
+            - processed/
+            - curated/
+            - gold/
+        actions:
+          base_blob:
+            tier_to_cool_after_days_since_last_access_time_greater_than: 30
+            tier_to_archive_after_days_since_last_access_time_greater_than: 180
+            delete_after_days_since_last_access_time_greater_than: 1825  # 5 years
+
+      # Rule 3: Blob snapshot management for versioned containers
+      - name: snapshot-lifecycle
+        enabled: true
+        filters:
+          blob_types:
+            - blockBlob
+        actions:
+          snapshot:
+            change_tier_to_cool_after_days_since_creation: 30
+            change_tier_to_cold_after_days_since_creation: 90
+            change_tier_to_archive_after_days_since_creation: 180
+            delete_after_days_since_creation_greater_than: 365
+
+      # Rule 4: Blob version management (when versioning is enabled)
+      - name: version-lifecycle
+        enabled: true
+        filters:
+          blob_types:
+            - blockBlob
+        actions:
+          version:
+            change_tier_to_cool_after_days_since_creation: 30
+            change_tier_to_cold_after_days_since_creation: 90
+            change_tier_to_archive_after_days_since_creation: 180
+            delete_after_days_since_creation: 365
+
+      # Rule 5: Temporary / scratch data — aggressive cleanup
+      - name: temp-data-cleanup
+        enabled: true
+        filters:
+          blob_types:
+            - blockBlob
+          prefix_match:
+            - tmp/
+            - scratch/
+            - temp/
+        actions:
+          base_blob:
+            delete_after_days_since_last_access_time_greater_than: 7
+
+      # Rule 6: Append blob logs — archive then delete
+      - name: append-log-lifecycle
+        enabled: true
+        filters:
+          blob_types:
+            - appendBlob
+        actions:
+          base_blob:
+            tier_to_archive_after_days_since_modification_greater_than: 90
+            delete_after_days_since_modification_greater_than: 730  # 2 years

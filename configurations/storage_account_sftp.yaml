@@ -1,0 +1,85 @@
+terraform_backend:
+  type: local
+  path: storage_account_sftp.tfstate
+
+default_location: westeurope
+
+# Storage account with HNS + SFTP + local users enabled.
+# Demonstrates two local users:
+#   - blob-uploader:  blob access for uploads container (password-only auth)
+#   - file-reader:    file share access with two SSH keys:
+#                       1. a static key (e.g. pre-existing CI key)
+#                       2. a Terraform-generated RSA key via the tls provider
+#                          (public key exposed as ref:tls_private_keys.sftp_deploy.public_key_openssh)
+#
+# The tls_private_key.sftp_deploy resource is declared at the bottom.
+# The private key is available as a sensitive output for injection into
+# secrets managers; only the public key is wired into the SFTP config.
+
+azure_resource_groups:
+  sftp:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-sftp-demo
+    location:            westeurope
+    tags:
+      environment: demo
+      managed_by:  terraform
+
+azure_storage_accounts:
+  sftp:
+    subscription_id:      "00000000-0000-0000-0000-000000000000"
+    resource_group_name:  ref:azure_resource_groups.sftp.resource_group_name
+    account_name:         sfsftpdemo001
+    sku_name:             Standard_LRS
+    kind:                 StorageV2
+    location:             ref:azure_resource_groups.sftp.location
+    is_hns_enabled:       true
+    is_sftp_enabled:      true
+    is_local_user_enabled: true
+    allow_blob_public_access: false
+    https_traffic_only_enabled: true
+    minimum_tls_version:  TLS1_2
+    tags:                 ref:azure_resource_groups.sftp.tags
+
+azure_storage_account_local_users:
+  blob-uploader:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.sftp.resource_group_name
+    account_name:        ref:azure_storage_accounts.sftp.name
+    username:            blob-uploader
+    permission_scopes:
+      - service:       blob
+        resource_name: uploads
+        permissions:   rwdl
+    home_directory:          uploads
+    allow_acl_authorization: false
+
+  file-reader:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: ref:azure_resource_groups.sftp.resource_group_name
+    account_name:        ref:azure_storage_accounts.sftp.name
+    username:            file-reader
+    permission_scopes:
+      - service:       file
+        resource_name: reports
+        permissions:   rl
+    ssh_authorized_keys:
+      # Static key — a pre-existing key for legacy CI systems or off-boarding safety.
+      - description: ci-legacy-key
+        key:         "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC0 ci@automation"
+      # Terraform-generated key — provisioned alongside infrastructure.
+      # The private key is in tls_private_key.sftp_deploy (sensitive output).
+      # Rotate by tainting: terraform taint tls_private_key.this[\"sftp_deploy\"]
+      - description: terraform-managed-deploy-key
+        key:         ref:tls_private_keys.sftp_deploy.public_key_openssh
+
+# ── TLS key pair for SFTP deploy key ──────────────────────────────────────────
+# Generates a 4096-bit RSA key pair. The public key is injected into the SFTP
+# local user above via ref: — no manual key management needed.
+# Retrieve the private key after apply with:
+#   terraform output -raw tls_private_keys_pem
+# (or store it in a key vault secret via azure_key_vault_secrets)
+tls_private_keys:
+  sftp_deploy:
+    algorithm: RSA
+    rsa_bits:  4096

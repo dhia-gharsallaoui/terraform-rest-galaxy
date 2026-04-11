@@ -126,7 +126,12 @@ locals {
     azure_communication_services              = local._acs_ctx
     azure_dns_record_sets                     = local._drs_ctx
     azure_foundry_managed_networks            = local._fmn_ctx
-    # azure_private_endpoints and azure_postgresql_flexible_servers resolve at L3 but are terminal (nothing refs their outputs)
+    # azure_private_endpoints, azure_postgresql_flexible_servers,
+    # azure_storage_account_blob_services, azure_storage_account_file_services,
+    # azure_storage_account_management_policies, azure_storage_account_encryption_scopes,
+    # azure_storage_account_local_users, azure_storage_account_object_replication_policies,
+    # and azure_storage_account_inventory_policies resolve at L3 but are terminal
+    # (nothing refs their outputs — do not add to context to avoid cycles)
   })
 
   # ── Layer 4: + Foundry deployments + Tier-A GitHub resources

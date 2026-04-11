@@ -1,0 +1,61 @@
+# Complete blob service configuration — demonstrates all available settings.
+#
+# Usage:
+#   TF_VAR_config_file=examples/azure/storage_account_blob_service/complete/config.yaml.example \
+#   terraform apply
+
+default_location: westeurope
+
+azure_storage_account_blob_services:
+  complete:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: mystorageaccount
+
+    # CORS — allow a web app to access blob storage directly
+    cors_rules:
+      - allowed_origins:
+          - "https://app.contoso.com"
+        allowed_methods:
+          - GET
+          - PUT
+          - POST
+          - DELETE
+          - HEAD
+          - OPTIONS
+        allowed_headers:
+          - "*"
+        exposed_headers:
+          - x-ms-request-id
+          - x-ms-version
+        max_age_in_seconds: 3600
+
+    # Soft delete for blobs (7 days)
+    delete_retention_policy:
+      enabled: true
+      days: 7
+      allow_permanent_delete: false
+
+    # Soft delete for containers (7 days)
+    container_delete_retention_policy:
+      enabled: true
+      days: 7
+
+    # Enable versioning and change feed (required for point-in-time restore)
+    is_versioning_enabled: true
+    change_feed_enabled: true
+    change_feed_retention_in_days: 30
+
+    # Point-in-time restore — window must be less than delete_retention_policy.days
+    restore_policy_enabled: true
+    restore_policy_days: 6
+
+    # Last access time tracking
+    last_access_time_tracking_enabled: true
+    last_access_tracking_granularity_in_days: 1
+
+    # Automatic snapshots
+    automatic_snapshot_policy_enabled: false
+
+    # Default service version
+    default_service_version: "2020-06-12"

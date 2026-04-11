@@ -1,0 +1,36 @@
+# Complete blob container configuration — all attributes exercised.
+#
+# Authentication:
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+
+terraform_backend:
+  type: local
+  path: storage_account_container_complete.tfstate
+
+azure_storage_account_containers:
+  complete:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp-prod
+    account_name: mystorageacct001
+    container_name: mycontainer-complete
+
+    # Access control
+    public_access: None                     # None | Blob | Container
+
+    # Custom metadata
+    metadata:
+      environment: production
+      team: platform
+      managed_by: terraform
+
+    # Encryption scope — override account-level default
+    default_encryption_scope: my-scope      # name of an encryption scope on the account
+    deny_encryption_scope_override: true    # prevent per-blob scope override
+
+    # NFS v3 squash settings (requires is_nfs_v3_enabled = true on the storage account)
+    # enable_nfs_v3_all_squash: false
+    # enable_nfs_v3_root_squash: true
+
+    # Container-level WORM (requires account-level immutable storage)
+    # immutable_storage_with_versioning_enabled: true

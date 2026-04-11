@@ -57,20 +57,42 @@ module "root" {
 
   azure_storage_accounts = {
     complete = {
-      subscription_id                 = var.subscription_id
-      resource_group_name             = var.resource_group_name
-      account_name                    = var.account_name
-      sku_name                        = var.sku_name
-      kind                            = var.kind
-      location                        = var.location
-      tags                            = var.tags
-      https_traffic_only_enabled      = var.https_traffic_only_enabled
-      minimum_tls_version             = var.minimum_tls_version
-      allow_blob_public_access        = var.allow_blob_public_access
-      allow_shared_key_access         = var.allow_shared_key_access
-      public_network_access           = var.public_network_access
-      default_to_oauth_authentication = var.default_to_oauth_authentication
-      allow_cross_tenant_replication  = var.allow_cross_tenant_replication
+      subscription_id                              = var.subscription_id
+      resource_group_name                          = var.resource_group_name
+      account_name                                 = var.account_name
+      sku_name                                     = var.sku_name
+      kind                                         = var.kind
+      location                                     = var.location
+      tags                                         = var.tags
+      zones                                        = var.zones
+      identity_type                                = var.identity_type
+      identity_user_assigned_identity_ids          = var.identity_user_assigned_identity_ids
+      access_tier                                  = var.access_tier
+      https_traffic_only_enabled                   = var.https_traffic_only_enabled
+      minimum_tls_version                          = var.minimum_tls_version
+      allow_blob_public_access                     = var.allow_blob_public_access
+      allow_shared_key_access                      = var.allow_shared_key_access
+      is_hns_enabled                               = var.is_hns_enabled
+      public_network_access                        = var.public_network_access
+      default_to_oauth_authentication              = var.default_to_oauth_authentication
+      allow_cross_tenant_replication               = var.allow_cross_tenant_replication
+      large_file_shares_state                      = var.large_file_shares_state
+      routing_preference                           = var.routing_preference
+      sas_policy                                   = var.sas_policy
+      key_expiration_period_in_days                = var.key_expiration_period_in_days
+      dns_endpoint_type                            = var.dns_endpoint_type
+      is_sftp_enabled                              = var.is_sftp_enabled
+      is_local_user_enabled                        = var.is_local_user_enabled
+      is_nfs_v3_enabled                            = var.is_nfs_v3_enabled
+      enable_extended_groups                       = var.enable_extended_groups
+      immutable_storage_with_versioning_enabled    = var.immutable_storage_with_versioning_enabled
+      network_acls                                 = var.network_acls
+      encryption_key_source                        = var.encryption_key_source
+      encryption_key_vault_uri                     = var.encryption_key_vault_uri
+      encryption_key_name                          = var.encryption_key_name
+      encryption_key_version                       = var.encryption_key_version
+      encryption_identity                          = var.encryption_identity
+      encryption_require_infrastructure_encryption = var.encryption_require_infrastructure_encryption
     }
   }
 }

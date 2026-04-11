@@ -36,6 +36,9 @@ locals {
   _tls_ctx = {
     for k, v in local.tls_private_keys : k => merge(v, {
       public_key_pem = tls_private_key.this[k].public_key_pem
+      # OpenSSH format: "ssh-rsa AAAA... comment" — ready for authorized_keys and
+      # Azure SFTP local user ssh_authorized_keys[*].key fields.
+      public_key_openssh = tls_private_key.this[k].public_key_openssh
       # Azure HIS expects PKCS#1 RSA public key (DER SEQUENCE of [n, e]) in base64,
       # matching the az connectedk8s connect CLI format.
       # tls_private_key.public_key_pem is SubjectPublicKeyInfo (PKCS#8) which wraps

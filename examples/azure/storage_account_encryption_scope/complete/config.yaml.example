@@ -1,0 +1,24 @@
+# Root-module equivalent configuration for the complete example.
+# Drive via: TF_VAR_config_file=config.yaml.example terraform apply
+#
+# Prerequisites: the referenced storage account and key vault key must exist.
+
+default_location: westeurope
+
+azure_storage_account_encryption_scopes:
+  platform:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage
+    account_name: mystorageaccount
+    encryption_scope_name: platscope
+    encryption_source: Microsoft.Storage
+    state: Enabled
+  cmk:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage
+    account_name: mystorageaccount
+    encryption_scope_name: cmkscope
+    encryption_source: Microsoft.KeyVault
+    key_vault_key_uri: "https://myvault.vault.azure.net/keys/mykey/abc123"
+    require_infrastructure_encryption: true
+    state: Enabled

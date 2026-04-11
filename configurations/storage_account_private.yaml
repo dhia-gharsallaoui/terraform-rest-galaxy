@@ -1,0 +1,73 @@
+# Storage account with private networking + account-level immutability (WORM).
+# No public endpoint access; all network traffic via private endpoints.
+# Demonstrates: public_network_access = Disabled, immutable storage with
+# versioning, SAS expiration policy, and access key rotation policy.
+#
+# Authentication:
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   export TF_VAR_subscription_id=$(az account show --query id -o tsv)
+
+terraform_backend:
+  type: local
+  path: storage_account_private.tfstate
+
+azure_resource_groups:
+  private:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-private
+    location: westeurope
+    tags:
+      environment: production
+      managed_by: terraform-rest
+      scenario: private-worm
+
+azure_user_assigned_identities:
+  storage_cmk:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-private
+    identity_name: uai-storage-private-cmk
+    location: westeurope
+
+azure_storage_accounts:
+  private:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-storage-private
+    account_name: stprivateworm001          # 3-24 lowercase alphanumeric, globally unique
+    sku_name: Standard_LRS
+    kind: StorageV2
+    location: westeurope
+    tags:
+      environment: production
+      scenario: private-worm
+
+    # Disable all public network access — private endpoints only
+    public_network_access: Disabled
+    network_acls:
+      default_action: Deny
+      bypass:
+        - AzureServices
+      ip_rules: []
+      virtual_network_subnet_ids: []
+
+    # Security hardening
+    https_traffic_only_enabled: true
+    minimum_tls_version: TLS1_2
+    allow_blob_public_access: false
+    allow_shared_key_access: false
+    default_to_oauth_authentication: true
+    allow_cross_tenant_replication: false
+
+    # Account-level WORM (immutable storage with versioning)
+    # WARNING: once enabled this CANNOT be disabled
+    immutable_storage_with_versioning_enabled: true
+
+    # SAS policy — block SAS tokens with no expiry or expiry > 1 day
+    sas_policy:
+      sas_expiration_period: "1.00:00:00"   # ISO 8601: 1 day
+      expiration_action: Block
+
+    # Access key rotation policy — expire after 30 days
+    key_expiration_period_in_days: 30
+
+    # System-assigned identity for diagnostic integrations
+    identity_type: SystemAssigned

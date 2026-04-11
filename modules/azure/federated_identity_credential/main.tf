@@ -10,10 +10,10 @@ locals {
 }
 
 resource "rest_resource" "federated_identity_credential" {
-  path             = local.fic_path
-  create_method    = "PUT"
-  check_existance  = var.check_existance
-  auth_ref         = var.auth_ref
+  path            = local.fic_path
+  create_method   = "PUT"
+  check_existance = var.check_existance
+  auth_ref        = var.auth_ref
 
   query = {
     api-version = [local.api_version]

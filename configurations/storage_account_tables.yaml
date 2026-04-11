@@ -1,0 +1,33 @@
+# Storage Account Tables
+#
+# This configuration creates two tables inside an existing storage account.
+#
+# Prerequisites:
+#   - A storage account must exist (managed separately or via azure_storage_accounts)
+#   - The storage account kind must support tables (StorageV2 or Storage)
+#
+#   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+#   TF_VAR_config_file=configurations/storage_account_tables.yaml terraform apply
+
+terraform_backend:
+  type: local
+
+default_location: westeurope
+
+azure_storage_account_tables:
+  events:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    table_name: EventsTable
+    signed_identifiers:
+      - id: readonly
+        access_policy:
+          start_time: "2025-01-01T00:00:00Z"
+          expiry_time: "2026-01-01T00:00:00Z"
+          permission: r
+  metrics:
+    subscription_id: "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-myapp
+    account_name: stmyapp001
+    table_name: MetricsTable

@@ -8,6 +8,10 @@
 #   - Role assignment: "Key Vault Crypto User" for the identity on the vault
 #   - Storage account with CMK encryption using the above key + identity
 #
+
+terraform_backend:
+  type: local
+  path: storage_account_cmk.tfstate
 # Prerequisites:
 #   export TF_VAR_access_token=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
 #   TF_VAR_config_file=configurations/storage_account_cmk.yaml terraform apply

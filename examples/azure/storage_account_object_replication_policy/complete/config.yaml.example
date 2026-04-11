@@ -1,0 +1,24 @@
+default_location: westeurope
+
+# Complete example — multi-rule policy with prefix filtering, date filter,
+# and optional feature toggles (metrics, priority replication, tag replication).
+
+azure_storage_account_object_replication_policies:
+  prod-replication:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-data
+    account_name:        mydestination001
+    source_account:      /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-data/providers/Microsoft.Storage/storageAccounts/mysource001
+    policy_id:           default
+    metrics_enabled:              true
+    priority_replication_enabled: false
+    tags_replication_enabled:     true
+    rules:
+      - source_container:      raw-data
+        destination_container: replicated-raw
+        min_creation_time:     "2024-01-01T00:00:00Z"
+        prefix_match:
+          - prefix/2024/
+          - prefix/2025/
+      - source_container:      processed-data
+        destination_container: replicated-processed
