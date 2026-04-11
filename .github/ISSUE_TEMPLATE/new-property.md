@@ -23,6 +23,16 @@ labels: new-property, from-config-repo
 - **Value type**: <!-- JSON type -->
 - **Docs**: <!-- link to REST API docs -->
 
+## Hero Promotion
+
+<!-- A hero module exposes ALL writable spec properties as variables, adds schema-derived validation rules,
+     ships an extended complete/ example, and includes multiple configurations/ YAMLs for distinct scenarios. -->
+
+- **Should this request also promote the module to hero quality?**: <!-- yes / no -->
+- **If yes — additional scenarios to cover** (e.g. basic, with encryption, with private endpoint):
+
+<!-- List the configurations/*.yaml scenarios you need beyond this single property -->
+
 ## Use Case
 
 <!-- Why is this property needed? -->

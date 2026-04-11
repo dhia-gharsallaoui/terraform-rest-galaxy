@@ -26,6 +26,14 @@ labels: api-version, from-config-repo
 
 <!-- Any known breaking changes between versions, or "None expected" -->
 
+## Hero Promotion
+
+<!-- Optionally combine this API version update with a hero promotion.
+     A hero module exposes ALL writable spec properties, adds schema-derived validation rules,
+     ships an extended complete/ example, and includes multiple configurations/ YAMLs. -->
+
+- **Should this update also promote the module to hero quality?**: <!-- yes / no -->
+
 ## Azure REST API Reference
 
 - **Changelog/Docs**: <!-- link -->

@@ -83,6 +83,16 @@ Or use the wrapper script:
 
 `kind_cluster`, `namespace`, `service_account`, `cluster_role_binding`, `config_map`, `deployment`, `job`, `helm_release`
 
+## Hero Modules
+
+Hero modules provide exhaustive coverage of their resource type: all writable spec properties exposed as variables, schema-derived `validation` blocks, an extended `complete/` example covering every variable group, and multiple `configurations/*.yaml` files demonstrating distinct real-world scenarios.
+
+| Module | Provider | Configurations | Notes |
+|--------|----------|---------------|-------|
+| *(none yet — use `/tf-fix <name> --hero` or `/tf-module <name> --hero` to promote)* | | | |
+
+> To add a module to this list, it must satisfy all hero completion criteria defined in `.github/skills/tf-fix/SKILL.md` (Hero Mode section).
+
 ## Configuration Files
 
 Configurations live in `configurations/` as YAML files. Each file declares the resources to manage and an optional backend:

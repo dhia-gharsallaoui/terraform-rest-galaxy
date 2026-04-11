@@ -1,6 +1,6 @@
 ---
 name: tf-module
-description: "Create a new versioned Terraform module for an Azure resource, or implement an end-to-end multi-resource scenario, using the rest provider. Use when: creating a terraform module, new azure module, generate module, add resource module, scaffold terraform azure, tf_module, create module resource group, create module virtual network, create module storage account, rest_resource module, azure rest api terraform module, storage account with customer managed key, CMK encryption, end to end scenario, keyvault with private endpoint, storage with encryption key, implement scenario, multi-resource configuration, deploy resource group with storage and keyvault"
+description: "Create a new versioned Terraform module for an Azure resource, or implement an end-to-end multi-resource scenario, using the rest provider. Use when: creating a terraform module, new azure module, generate module, add resource module, scaffold terraform azure, tf_module, create module resource group, create module virtual network, create module storage account, rest_resource module, azure rest api terraform module, storage account with customer managed key, CMK encryption, end to end scenario, keyvault with private endpoint, storage with encryption key, implement scenario, multi-resource configuration, deploy resource group with storage and keyvault, hero module, hero quality module, scaffold hero, full coverage module"
 argument-hint: "Azure resource type (e.g. 'Storage Account') or end-to-end scenario (e.g. 'storage account with customer-managed encryption key')"
 ---
 
@@ -14,6 +14,7 @@ Scaffold a production-quality versioned Terraform module for an Azure resource, 
 - You want to add a new Azure resource type to this repo
 - You need a new `modules/azure/<resource_name>/` sub-module backed by the Azure REST API spec
 - You want the root module updated automatically to expose the new resource via `for_each`
+- Add `--hero` (or the user says "hero module") to also apply hero-quality criteria (see Hero Mode below)
 
 ### End-to-end scenario (composite configuration)
 - The user describes a **goal** involving multiple resource types (e.g. "storage account with customer-managed encryption key", "key vault with private endpoint", "AKS cluster with managed identity and ACR pull")
@@ -283,6 +284,81 @@ Layer 3: azure_private_endpoints (← subnets, azure_key_vaults), private_dns_zo
 ```
 
 **Lifecycle test**: `tests/integration_config_key_vault_private_endpoint.tftest.hcl` (plan → apply → destroy)
+
+## Hero Mode — Scaffolding a Hero-Quality Module
+
+When the user requests a **hero module** (or uses the phrase "hero" alongside the resource name), follow the standard Mode A or Mode B procedure and additionally apply the following criteria on top.
+
+### What is a hero module?
+
+| Criterion | Standard module | Hero module |
+|-----------|----------------|-------------|
+| **Properties** | Common writable properties | **All** writable properties from the spec exposed as variables |
+| **Examples** | `minimum/` + basic `complete/` | Extended `complete/` covering every variable group |
+| **Configurations** | 1 config YAML (if any) | **Multiple** `configurations/*.yaml` files showing distinct permutations and scenarios |
+| **Variable validation** | No validation rules | `validation` blocks derived from spec constraints (enums, length limits, regex patterns) |
+
+### Additional steps for hero mode (after standard generation)
+
+#### H1 — Full property coverage
+
+Read the full spec for the resource (`azure-specs_read_spec`) and list every writable property. For each property not already in `variables.tf`:
+- Add the variable with the correct HCL type, `default = null`, and a `description` quoting the spec description.
+- Add it to the `body` in `main.tf`.
+- Add it to the `map(object({...}))` in the root `azure_<plural>.tf`.
+
+#### H2 — Variable validation rules
+
+For every variable mapping to a spec property with explicit constraints, add a `validation` block:
+
+| Spec constraint | Terraform validation |
+|----------------|----------------------|
+| `enum: [a, b, c]` | `condition = contains(["a","b","c"], var.x)` |
+| `minLength: N` | `condition = length(var.x) >= N` |
+| `maxLength: N` | `condition = length(var.x) <= N` |
+| `pattern: "^[a-z]..."` | `condition = can(regex("^[a-z]...", var.x))` |
+| `minimum: N` / `maximum: N` | `condition = var.x >= N && var.x <= N` |
+
+Only add validations where the constraint is explicit in the spec. Guard nullable optional variables:
+```hcl
+validation {
+  condition     = var.x == null || length(var.x) <= 24
+  error_message = "x must be at most 24 characters."
+}
+```
+
+#### H3 — Extended complete example
+
+Ensure `examples/azure/<name>/complete/` exercises every variable group:
+- `config.yaml.example` contains meaningful example values for every property.
+- The example is self-documenting: a reader understands all configuration options without reading the spec.
+
+#### H4 — Multiple configuration files
+
+Create at least **two** `configurations/*.yaml` files demonstrating distinct scenarios (e.g. basic, with encryption, with private endpoint, with RBAC). Each must have a matching `tests/integration_config_<scenario_name>.tftest.hcl` that at minimum runs a plan.
+
+### Hero completion criteria
+
+A module is hero quality when:
+- [ ] All writable spec properties are exposed as variables
+- [ ] All optional variables have `validation` blocks where the spec defines constraints
+- [ ] `complete/` example exercises every variable group
+- [ ] At least two `configurations/*.yaml` files exist with distinct scenarios
+- [ ] All configuration tests pass (`terraform test`)
+- [ ] A plan runs cleanly for every configuration YAML (`./tf.sh plan`)
+- [ ] The **Hero Modules** table in `README.md` is updated (see below)
+
+### Updating the Hero Modules table
+
+Once all criteria above are met, add a row to the **Hero Modules** table in `README.md`:
+
+```markdown
+| `<module_name>` | Azure | `configurations/<name>_basic.yaml`, `configurations/<name>_<variant>.yaml` | <one-line note> |
+```
+
+Remove the placeholder row `*(none yet — ...)` if it is still present.
+
+---
 
 ## Conventions
 

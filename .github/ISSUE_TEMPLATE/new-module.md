@@ -27,6 +27,17 @@ labels: new-module, from-config-repo
 - **API version**: <!-- e.g. 2024-01-01 -->
 - **Docs**: <!-- link to learn.microsoft.com REST API docs -->
 
+## Hero Module
+
+<!-- A hero module exposes ALL writable spec properties as variables, adds schema-derived validation rules,
+     ships an extended complete/ example, and includes multiple configurations/ YAMLs for distinct scenarios.
+     It is listed in the Hero Modules table in README.md. -->
+
+- **Should this be a hero module?**: <!-- yes / no -->
+- **If yes — key scenarios to cover** (e.g. basic, with encryption, with private endpoint):
+
+<!-- List the configurations/*.yaml scenarios you need -->
+
 ## Consumer Config Example
 
 ```yaml
