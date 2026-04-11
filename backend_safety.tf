@@ -8,9 +8,9 @@
 # the backend infrastructure.
 
 locals {
-  _backend_rg_conflicts = local._terraform_backend != null ? [
+  _backend_rg_conflicts = local._terraform_backend != null && try(local._terraform_backend.resource_group_name, "") != "" ? [
     for k, v in merge(try(local._yaml_raw.azure_resource_groups, {}), var.azure_resource_groups) :
-    k if try(v.resource_group_name, "") == try(local._terraform_backend.resource_group_name, "")
+    k if try(v.resource_group_name, k) == local._terraform_backend.resource_group_name
   ] : []
 
   _backend_sa_conflicts = local._terraform_backend != null ? [

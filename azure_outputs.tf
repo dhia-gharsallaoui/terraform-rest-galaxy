@@ -57,6 +57,9 @@ output "azure_values" {
     azure_app_service_domains                       = module.azure_app_service_domains
     azure_dns_zones                                 = module.azure_dns_zones
     azure_dns_record_sets                           = module.azure_dns_record_sets
+    azure_foundry_accounts                          = module.azure_foundry_accounts
+    azure_foundry_managed_networks                  = module.azure_foundry_managed_networks
+    azure_foundry_deployments                       = module.azure_foundry_deployments
   } : k => v if length(v) > 0 }
 }
 

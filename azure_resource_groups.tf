@@ -49,7 +49,7 @@ module "azure_resource_groups" {
   depends_on = [module.azure_subscriptions]
 
   subscription_id     = try(each.value.subscription_id, var.subscription_id)
-  resource_group_name = each.value.resource_group_name
+  resource_group_name = try(each.value.resource_group_name, each.key)
   location            = try(each.value.location != null ? each.value.location : local.default_location, local.default_location)
   managed_by          = try(each.value.managed_by, null)
   tags                = try(each.value.tags, null)

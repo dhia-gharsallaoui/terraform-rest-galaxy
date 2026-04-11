@@ -15,7 +15,7 @@ location:           ref:azure_resource_groups.app.location
 ## Providers
 
 
-### [Azure](yaml-reference-azure.md) — 57 resources
+### [Azure](yaml-reference-azure.md) — 60 resources
 
   - [`azure_app_service_domains`](yaml-reference-azure.md#azure-app-service-domains)
   - [`azure_arc_connected_clusters`](yaml-reference-azure.md#azure-arc-connected-clusters)
@@ -38,6 +38,9 @@ location:           ref:azure_resource_groups.app.location
   - [`azure_federated_identity_credentials`](yaml-reference-azure.md#azure-federated-identity-credentials)
   - [`azure_firewall_policies`](yaml-reference-azure.md#azure-firewall-policies)
   - [`azure_firewalls`](yaml-reference-azure.md#azure-firewalls)
+  - [`azure_foundry_accounts`](yaml-reference-azure.md#azure-foundry-accounts)
+  - [`azure_foundry_deployments`](yaml-reference-azure.md#azure-foundry-deployments)
+  - [`azure_foundry_managed_networks`](yaml-reference-azure.md#azure-foundry-managed-networks)
   - [`azure_github_network_settings`](yaml-reference-azure.md#azure-github-network-settings)
   - [`azure_ipam_pools`](yaml-reference-azure.md#azure-ipam-pools)
   - [`azure_ipam_static_cidrs`](yaml-reference-azure.md#azure-ipam-static-cidrs)

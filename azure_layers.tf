@@ -92,6 +92,7 @@ locals {
 
   # ── Layer 2: + all L2 resources ────────────────────────────────────────
   _ctx_l2 = merge(local._ctx_l1, {
+    azure_foundry_accounts                    = local._fa_ctx
     azure_arc_connected_clusters              = local._arc_cc_ctx
     azure_key_vault_keys                      = local._kvk_ctx
     azure_resource_provider_features          = local._rpf_ctx
@@ -124,15 +125,18 @@ locals {
     azure_github_network_settings             = local._ghns_ctx
     azure_communication_services              = local._acs_ctx
     azure_dns_record_sets                     = local._drs_ctx
+    azure_foundry_managed_networks            = local._fmn_ctx
     # azure_private_endpoints and azure_postgresql_flexible_servers resolve at L3 but are terminal (nothing refs their outputs)
   })
 
-  # ── Layer 4: + Tier-A GitHub resources
+  # ── Layer 4: + Foundry deployments + Tier-A GitHub resources
+  #    - azure_foundry_deployments     depend on azure_foundry_accounts (L2/L3)
   #    - github_runner_groups          depend on L3 github_network_settings
   #    - github_repositories           depend only on externals (resolved at L3)
   #    - github_organization_secrets   depend only on externals
   #    - github_organization_variables depend only on externals
   _ctx_l4 = merge(local._ctx_l3, {
+    azure_foundry_deployments     = local._fd_ctx
     github_repositories           = local._ghrepo_ctx
     github_organization_secrets   = local._ghorgsec_ctx
     github_organization_variables = local._ghorgvar_ctx

@@ -1,0 +1,27 @@
+# Root-module equivalent for examples/azure/foundry_account/complete
+# Usage: TF_VAR_config_file=config.yaml terraform apply (from repo root)
+
+azure_resource_groups:
+  foundry:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-foundry
+    location:            francecentral
+    tags:
+      environment: production
+      team:        ai
+
+azure_foundry_accounts:
+  complete:
+    subscription_id:             "00000000-0000-0000-0000-000000000000"
+    resource_group_name:         ref:azure_resource_groups.foundry.resource_group_name
+    account_name:                my-foundry-complete
+    location:                    ref:azure_resource_groups.foundry.location
+    sku_name:                    S0
+    kind:                        AIFoundry
+    identity_type:               SystemAssigned
+    allow_project_management:    true
+    public_network_access:       Disabled
+    disable_local_auth:          true
+    network_acls_default_action: Deny
+    network_acls_bypass:         AzureServices
+    tags:                        ref:azure_resource_groups.foundry.tags

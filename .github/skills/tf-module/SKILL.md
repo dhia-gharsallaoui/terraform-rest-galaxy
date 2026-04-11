@@ -113,7 +113,7 @@ For each **EXTEND** module:
 After all modules are ready:
 1. Update `azure_config.tf` with the new ref-resolution layers
 2. Update `azure_outputs.tf` to include all new resource types
-3. Create the configuration YAML file in `configurations/`
+3. Create the configuration YAML file in `configurations/` — **always include a `terraform_backend` block** (see Conventions below)
 4. Create the configuration lifecycle test (see Step B.6)
 5. Run `terraform fmt -recursive` and `terraform validate`
 6. Run the full lifecycle test: init → plan → apply → destroy (see Step B.7)
@@ -321,6 +321,14 @@ Layer 3: azure_private_endpoints (← subnets, azure_key_vaults), private_dns_zo
 - Configuration YAML files live in `configurations/` with descriptive names (e.g. `storage_account_cmk.yaml`, `key_vault_private_endpoint.yaml`)
 - The `ref:` syntax in YAML wires cross-resource dependencies resolved at plan time by `azure_config.tf`
 - **`externals`**: Use the `externals` top-level YAML key to declare static attributes for resources not managed by Terraform (e.g. manually-created tenants, existing resource groups, GitHub organizations). Available at Layer 0 via `ref:externals.<category>.<key>.<attr>`. See [Pattern #8](../../patterns/rest-provider-patterns.md#8-external-references-externals--static-data-in-ref-context).
+- Every configuration YAML **must** include a `terraform_backend` block immediately after the header comment. Use `type: local` for local execution:
+  ```yaml
+  # ── State backend ────────────────────────────────────────────────────────────
+  terraform_backend:
+    type: local
+    path: <scenario_name>.tfstate
+  ```
+  The `path` value is `<scenario_name>.tfstate` where `<scenario_name>` matches the filename without extension. This ensures state is always isolated per configuration.
 - Every configuration YAML **must** have a corresponding test in `tests/` (prefixed with `integration_config_`) that validates at minimum a plan
 - **Destroy must always succeed.** Resources that don't support DELETE (e.g. Key Vault management-plane keys) must use `rest_operation` instead of `rest_resource`
 - A configuration is not considered complete until `terraform test` passes

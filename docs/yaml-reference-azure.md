@@ -785,6 +785,214 @@ azure_firewalls:
 
 ---
 
+### `azure_foundry_accounts`
+
+**API version:** `2025-10-01-preview`
+
+Map of Azure AI Foundry accounts to create. Each map key is the for_each identifier.
+
+Azure AI Foundry v2 uses Microsoft.CognitiveServices/accounts with kind=AIFoundry.
+This is the NEW Foundry experience at ai.azure.com — not the old Azure AI Studio.
+
+Security defaults (SOC2-ready):
+  - public_network_access = "Disabled"
+  - disable_local_auth    = true
+  - network_acls_default_action = "Deny"
+
+Example (minimum):
+  azure_foundry_accounts = {
+    main = {
+      resource_group_name = "rg-foundry"
+      account_name        = "my-foundry"
+      location            = "francecentral"
+      sku_name            = "S0"
+    }
+  }
+
+Example (with system identity and project management):
+  azure_foundry_accounts = {
+    main = {
+      resource_group_name      = "rg-foundry"
+      account_name             = "my-foundry"
+      location                 = "francecentral"
+      sku_name                 = "S0"
+      identity_type            = "SystemAssigned"
+      allow_project_management = true
+      public_network_access    = "Enabled"
+      disable_local_auth       = true
+    }
+  }
+
+Example (with customer-managed key):
+  azure_foundry_accounts = {
+    main = {
+      resource_group_name           = "rg-foundry"
+      account_name                  = "my-foundry"
+      location                      = "francecentral"
+      sku_name                      = "S0"
+      identity_type                 = "UserAssigned"
+      identity_user_assigned_identity_ids = ["ref:azure_user_assigned_identities.foundry.id"]
+      encryption_key_source         = "Microsoft.KeyVault"
+      encryption_key_vault_uri      = "ref:azure_key_vaults.foundry.vault_uri"
+      encryption_key_name           = "ref:azure_key_vault_keys.foundry.name"
+      encryption_identity_client_id = "ref:azure_user_assigned_identities.foundry.client_id"
+    }
+  }
+
+#### Attributes
+
+| Name | Type | Required | Default | Description |
+|------|------|:--------:|---------|-------------|
+| `subscription_id` | `string` | no | `null` |  |
+| `resource_group_name` | `string` | yes | — |  |
+| `account_name` | `string` | yes | — |  |
+| `location` | `string` | no | `null` |  |
+| `kind` | `string` | no | `"AIFoundry"` |  |
+| `sku_name` | `string` | yes | — |  |
+| `sku_capacity` | `number` | no | `null` |  |
+| `sku_tier` | `string` | no | `null` |  |
+| `identity_type` | `string` | no | `null` |  |
+| `identity_user_assigned_identity_ids` | `list(string)` | no | `null` |  |
+| `public_network_access` | `string` | no | `"Disabled"` |  |
+| `network_acls_default_action` | `string` | no | `"Deny"` |  |
+| `network_acls_bypass` | `string` | no | `null` |  |
+| `network_acls_ip_rules` | `list(string)` | no | `null` |  |
+| `network_acls_virtual_network_rules` | `list(object)` | no | `null` |  |
+| `network_injections` | `list(object)` | no | `null` |  |
+| `restrict_outbound_network_access` | `bool` | no | `null` |  |
+| `allowed_fqdn_list` | `list(string)` | no | `null` |  |
+| `encryption_key_source` | `string` | no | `null` |  |
+| `encryption_key_vault_uri` | `string` | no | `null` |  |
+| `encryption_key_name` | `string` | no | `null` |  |
+| `encryption_key_version` | `string` | no | `null` |  |
+| `encryption_identity_client_id` | `string` | no | `null` |  |
+| `disable_local_auth` | `bool` | no | `true` |  |
+| `stored_completions_disabled` | `bool` | no | `null` |  |
+| `dynamic_throttling_enabled` | `bool` | no | `null` |  |
+| `allow_project_management` | `bool` | no | `null` |  |
+| `associated_projects` | `list(string)` | no | `null` |  |
+| `default_project` | `string` | no | `null` |  |
+| `custom_sub_domain_name` | `string` | no | `null` |  |
+| `user_owned_storage` | `list(object)` | no | `null` |  |
+| `rai_monitor_config_storage_resource_id` | `string` | no | `null` |  |
+| `rai_monitor_config_identity_client_id` | `string` | no | `null` |  |
+| `aml_workspace_resource_id` | `string` | no | `null` |  |
+| `aml_workspace_identity_client_id` | `string` | no | `null` |  |
+| `restore` | `bool` | no | `null` |  |
+| `tags` | `map(string)` | no | `null` |  |
+
+---
+
+### `azure_foundry_deployments`
+
+**API version:** `2025-09-01`
+
+Map of Azure AI Foundry model deployments to create. Each map key is the for_each
+identifier. Deployments must reference an existing Foundry account.
+
+A plan-time precondition validates that model_name is available in the target
+location before applying. If the model is not available, terraform plan fails
+with a CLI command to list available models.
+
+Example (GPT-4o GlobalStandard):
+  azure_foundry_deployments = {
+    gpt4o = {
+      resource_group_name    = "rg-foundry"
+      account_name           = "my-foundry"
+      location               = "francecentral"
+      deployment_name        = "gpt-4o"
+      model_format           = "OpenAI"
+      model_name             = "gpt-4o"
+      model_version          = "2024-08-06"
+      sku_name               = "GlobalStandard"
+      sku_capacity           = 100
+      version_upgrade_option = "OnceNewDefaultVersionAvailable"
+    }
+  }
+
+Example (embeddings + spillover):
+  azure_foundry_deployments = {
+    embeddings = {
+      resource_group_name       = "rg-foundry"
+      account_name              = "my-foundry"
+      location                  = "francecentral"
+      deployment_name           = "text-embedding-3-large"
+      model_format              = "OpenAI"
+      model_name                = "text-embedding-3-large"
+      sku_name                  = "Standard"
+      sku_capacity              = 50
+      version_upgrade_option    = "NoAutoUpgrade"
+      spillover_deployment_name = "text-embedding-3-large-fallback"
+    }
+  }
+
+#### Attributes
+
+| Name | Type | Required | Default | Description |
+|------|------|:--------:|---------|-------------|
+| `subscription_id` | `string` | no | `null` |  |
+| `resource_group_name` | `string` | yes | — |  |
+| `account_name` | `string` | yes | — |  |
+| `location` | `string` | yes | — |  |
+| `deployment_name` | `string` | yes | — |  |
+| `model_format` | `string` | yes | — |  |
+| `model_name` | `string` | yes | — |  |
+| `model_version` | `string` | no | `null` |  |
+| `model_publisher` | `string` | no | `null` |  |
+| `model_source` | `string` | no | `null` |  |
+| `model_source_account` | `string` | no | `null` |  |
+| `sku_name` | `string` | yes | — |  |
+| `sku_capacity` | `number` | no | `null` |  |
+| `version_upgrade_option` | `string` | no | `"OnceNewDefaultVersionAvailable"` |  |
+| `rai_policy_name` | `string` | no | `null` |  |
+| `scale_type` | `string` | no | `null` |  |
+| `scale_capacity` | `number` | no | `null` |  |
+| `capacity_settings_designated_capacity` | `number` | no | `null` |  |
+| `capacity_settings_priority` | `number` | no | `null` |  |
+| `parent_deployment_name` | `string` | no | `null` |  |
+| `spillover_deployment_name` | `string` | no | `null` |  |
+| `tags` | `map(string)` | no | `null` |  |
+
+---
+
+### `azure_foundry_managed_networks`
+
+**API version:** `2025-10-01-preview`
+
+Map of Azure AI Foundry managed networks to configure. The managed network name
+is always 'default'. Each map key acts as the for_each identifier.
+
+IMPORTANT: Requires the AI.ManagedVnetPreview feature flag and a supported region.
+The managed network cannot be deleted independently — it is deleted with the account.
+
+#### Attributes
+
+| Name | Type | Required | Default | Description |
+|------|------|:--------:|---------|-------------|
+| `subscription_id` | `string` | no | `null` |  |
+| `resource_group_name` | `string` | yes | — |  |
+| `account_name` | `string` | yes | — |  |
+| `location` | `string` | no | `"francecentral"` |  |
+| `isolation_mode` | `string` | no | `"AllowOnlyApprovedOutbound"` |  |
+| `managed_network_kind` | `string` | no | `"V2"` |  |
+| `firewall_sku` | `string` | no | `"Standard"` |  |
+| `outbound_rules` | `map(object)` | no | `null` |  |
+
+#### YAML Example
+
+```yaml
+azure_foundry_managed_networks:
+  main:
+    resource_group_name: "rg-foundry"
+    account_name: "my-foundry"
+    location: "francecentral"
+    isolation_mode: "AllowOnlyApprovedOutbound"
+    managed_network_kind: "V2"
+    firewall_sku: "Standard"
+```
+
+---
+
 ### `azure_github_network_settings`
 
 **API version:** `2024-04-02`

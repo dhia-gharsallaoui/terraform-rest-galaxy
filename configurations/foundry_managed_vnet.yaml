@@ -1,0 +1,88 @@
+---
+# Azure AI Foundry v2 — Managed Virtual Network (preview)
+#
+# Resources deployed:
+#   1. Resource group (francecentral)
+#   2. Feature flag: AI.ManagedVnetPreview — requires manual approval (hours)
+#   3. Foundry account (Microsoft.CognitiveServices/accounts, kind=AIFoundry)
+#   4. Managed network (AllowOnlyApprovedOutbound + V2 + Standard firewall)
+#   5. GPT-4o GlobalStandard deployment (100K TPM)
+#   6. text-embedding-3-large Standard deployment (50K TPM)
+#
+# PREREQUISITES:
+#   Register the preview feature (approval takes several hours):
+#     az feature register --namespace Microsoft.CognitiveServices --name AI.ManagedVnetPreview
+#     az feature show --namespace Microsoft.CognitiveServices --name AI.ManagedVnetPreview \
+#       --query "properties.state" -o tsv
+#
+# LIMITATIONS:
+#   - isolation_mode cannot be changed after enabling (irreversible)
+#   - Only supported in 20 regions (see foundry_managed_network location validation)
+#   - Outbound rules must be managed via Azure CLI after deployment
+
+# ── State backend ────────────────────────────────────────────────────────────
+terraform_backend:
+  type: local
+  path: foundry_managed_vnet.tfstate
+
+azure_resource_groups:
+  foundry:
+    location: francecentral
+
+azure_resource_provider_features:
+  foundry_managed_vnet:
+    provider_namespace: Microsoft.CognitiveServices
+    feature_name: AI.ManagedVnetPreview
+    state: Registered
+
+azure_foundry_accounts:
+  main:
+    resource_group_name: ref:azure_resource_groups.foundry.resource_group_name
+    location: ref:azure_resource_groups.foundry.location
+    account_name: my-foundry-hub
+    sku_name: S0
+    identity_type: SystemAssigned
+    allow_project_management: true
+    public_network_access: Disabled
+    disable_local_auth: true
+    network_acls_default_action: Deny
+
+azure_foundry_managed_networks:
+  main:
+    resource_group_name: ref:azure_resource_groups.foundry.resource_group_name
+    location: ref:azure_resource_groups.foundry.location
+    account_name: ref:azure_foundry_accounts.main.account_name
+    isolation_mode: AllowOnlyApprovedOutbound
+    managed_network_kind: V2
+    firewall_sku: Standard
+    outbound_rules:
+      entra_id:
+        type: ServiceTag
+        service_tag: AzureActiveDirectory
+        service_tag_action: Allow
+        service_tag_protocol: TCP
+        service_tag_port_ranges: "443"
+
+azure_foundry_deployments:
+  gpt4o:
+    resource_group_name: ref:azure_resource_groups.foundry.resource_group_name
+    location: ref:azure_resource_groups.foundry.location
+    account_name: ref:azure_foundry_accounts.main.account_name
+    deployment_name: gpt-4o
+    model_format: OpenAI
+    model_name: gpt-4o
+    model_version: "2024-08-06"
+    sku_name: GlobalStandard
+    sku_capacity: 100
+    version_upgrade_option: OnceCurrentVersionExpired
+
+  embeddings:
+    resource_group_name: ref:azure_resource_groups.foundry.resource_group_name
+    location: ref:azure_resource_groups.foundry.location
+    account_name: ref:azure_foundry_accounts.main.account_name
+    deployment_name: text-embedding-3-large
+    model_format: OpenAI
+    model_name: text-embedding-3-large
+    sku_name: Standard
+    sku_capacity: 50
+    version_upgrade_option: NoAutoUpgrade

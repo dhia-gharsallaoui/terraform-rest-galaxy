@@ -1,0 +1,37 @@
+# Root-module equivalent for examples/azure/foundry_managed_network/complete
+# Usage: TF_VAR_config_file=config.yaml terraform apply (from repo root)
+# PREREQUISITE: AI.ManagedVnetPreview feature flag must be registered
+
+azure_resource_groups:
+  foundry:
+    subscription_id:     "00000000-0000-0000-0000-000000000000"
+    resource_group_name: rg-foundry
+    location:            francecentral
+    tags:
+      environment: production
+
+azure_resource_provider_features:
+  foundry_managed_vnet:
+    provider_namespace: Microsoft.CognitiveServices
+    feature_name: AI.ManagedVnetPreview
+    state: Registered
+
+azure_foundry_accounts:
+  main:
+    subscription_id:         "00000000-0000-0000-0000-000000000000"
+    resource_group_name:     ref:azure_resource_groups.foundry.resource_group_name
+    account_name:            my-foundry
+    location:                ref:azure_resource_groups.foundry.location
+    sku_name:                S0
+    identity_type:           SystemAssigned
+    allow_project_management: true
+
+azure_foundry_managed_networks:
+  complete:
+    subscription_id:      "00000000-0000-0000-0000-000000000000"
+    resource_group_name:  ref:azure_resource_groups.foundry.resource_group_name
+    account_name:         ref:azure_foundry_accounts.main.account_name
+    location:             ref:azure_resource_groups.foundry.location
+    isolation_mode:       AllowOnlyApprovedOutbound
+    managed_network_kind: V2
+    firewall_sku:         Standard
