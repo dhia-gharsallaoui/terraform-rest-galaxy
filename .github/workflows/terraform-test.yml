@@ -13,9 +13,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ── Plan-only tests — no Azure credentials needed ──────────────────────────
-  plan-tests:
-    name: "Plan-only tests"
+  # ── Build rest provider from source — shared by all jobs ───────────────────
+  build-provider:
+    name: "Build rest provider"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,6 +44,56 @@ jobs:
             .github/scripts/setup-providers.sh .providers/rest
           fi
 
+      - name: Upload provider artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
+          retention-days: 1
+
+  # ── Discover plan-safe config YAMLs for matrix ──────────────────────────────
+  generate-config-matrix:
+    name: "Discover config matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      configs: ${{ steps.list.outputs.configs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: List plan-safe configs
+        id: list
+        run: |
+          # Exclude configs that require a live ARM token:
+          #   - top-level externals: blocks (live ARM API calls at plan time)
+          #   - # ci:requires-live-token marker (e.g. import configs with check_existance)
+          # Output basenames without .yaml for clean matrix job names.
+          configs=$(grep -rL "^externals:" configurations/*.yaml \
+            | xargs grep -rL "^# ci:requires-live-token" \
+            | sort \
+            | xargs -I{} basename {} .yaml \
+            | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "configs=$configs" >> "$GITHUB_OUTPUT"
+          echo "Discovered $(echo "$configs" | jq -r 'length') plan-safe configs"
+
+  # ── Plan-only tests — no Azure credentials needed ──────────────────────────
+  plan-tests:
+    name: "Plan-only tests"
+    needs: build-provider
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download provider artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
+
+      - name: Install provider from artifact
+        run: .github/scripts/restore-provider.sh
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
@@ -59,34 +109,89 @@ jobs:
         env:
           TF_VAR_access_token: "placeholder"
         run: |
-          terraform test \
-            -test-directory=tests/azure \
-            -filter=tests/azure/config_storage_account_cmk.tftest.hcl \
-            -filter=tests/azure/config_vwan_secure_hub_routing_intent.tftest.hcl \
-            -filter=tests/azure/config_acme_github_runners.tftest.hcl
+          # Auto-discover all config_*.tftest.hcl files in tests/azure/
+          filters=()
+          for f in tests/azure/config_*.tftest.hcl; do
+            [ -f "$f" ] && filters+=("-filter=$f")
+          done
+          if [ ${#filters[@]} -gt 0 ]; then
+            terraform test -test-directory=tests/azure "${filters[@]}"
+          else
+            echo "No config tests found in tests/azure/"
+          fi
 
       - name: Run plan-only tests (tests/)
         env:
           TF_VAR_access_token: "placeholder"
+          TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
         run: |
-          terraform test \
-            -filter=tests/unit_azure_billing_associated_tenant.tftest.hcl \
-            -filter=tests/unit_azure_dns_record_set.tftest.hcl \
-            -filter=tests/unit_azure_email_communication_service_domain.tftest.hcl \
-            -filter=tests/unit_azure_management_lock.tftest.hcl \
-            -filter=tests/unit_github_hosted_runner.tftest.hcl \
-            -filter=tests/unit_github_runner_group.tftest.hcl \
-            -filter=tests/integration_azure_dns_record_set.tftest.hcl \
-            -filter=tests/integration_azure_email_communication_service_domain.tftest.hcl \
-            -filter=tests/integration_config_ciam_directory_dpl8432847326.tftest.hcl \
-            -filter=tests/integration_config_communication_service_email.tftest.hcl \
-            -filter=tests/integration_config_acme_github_runners.tftest.hcl \
-            -filter=tests/integration_config_acme_ipam.tftest.hcl \
-            -filter=tests/integration_config_github_actions_oidc.tftest.hcl
+          # GitHub unit tests — always plan-safe (no Azure provider_check)
+          filters=()
+          for f in tests/unit_github_*.tftest.hcl; do
+            [ -f "$f" ] && filters+=("-filter=$f")
+          done
+          # integration_config_* tests — only include those whose corresponding
+          # configurations/<name>.yaml exists and has no externals block.
+          # (externals require live ARM API calls and fail with a placeholder token)
+          for f in tests/integration_config_*.tftest.hcl; do
+            name=$(basename "$f" .tftest.hcl | sed 's/^integration_config_//')
+            yaml="configurations/${name}.yaml"
+            if [ -f "$yaml" ] && ! grep -q "^externals:" "$yaml"; then
+              filters+=("-filter=$f")
+            fi
+          done
+          if [ ${#filters[@]} -gt 0 ]; then
+            terraform test "${filters[@]}"
+          else
+            echo "No plan-only tests found"
+          fi
+
+  # ── Plan each configuration YAML (matrix) ───────────────────────────────────
+  # Each config gets its own runner → individual pass/fail in the GitHub UI.
+  # Configs with externals blocks are skipped here (need live ARM token);
+  # they are validated in the apply-tests job on push to main.
+  plan-config:
+    name: "Plan ${{ matrix.config }}"
+    needs: [build-provider, generate-config-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.generate-config-matrix.outputs.configs) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download provider artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
+
+      - name: Install provider from artifact
+        run: .github/scripts/restore-provider.sh
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+
+      - name: Plan configurations/${{ matrix.config }}.yaml
+        env:
+          TF_VAR_access_token: "placeholder"
+          TF_VAR_config_file: "configurations/${{ matrix.config }}.yaml"
+          # Placeholder subscription_id for configs that don't embed one in their YAML
+          TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
+        run: terraform plan -input=false -no-color
 
   # ── Apply tests — require Azure credentials ────────────────────────────────
   apply-tests:
     name: "Apply tests"
+    needs: build-provider
     runs-on: ubuntu-latest
     # Only run on push to main (skip in PRs / forks / act local runs)
     if: github.event_name != 'pull_request'
@@ -97,27 +202,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Checkout rest provider
-        if: ${{ !env.ACT }}
-        uses: actions/checkout@v6
+      - name: Download provider artifact
+        uses: actions/download-artifact@v6
         with:
-          repository: ${{ github.repository_owner }}/terraform-provider-rest
-          path: .providers/rest
-          ref: main
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: false
-
-      - name: Build & install rest provider
-        run: |
-          if [ "$ACT" = "true" ]; then
-            .github/scripts/setup-providers.sh /tmp/rest
-          else
-            .github/scripts/setup-providers.sh .providers/rest
-          fi
+      - name: Install provider from artifact
+        run: .github/scripts/restore-provider.sh
 
       - name: Azure Login (OIDC)
         uses: azure/login@v3
@@ -149,12 +241,16 @@ jobs:
           TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          terraform test \
-            -test-directory=tests/azure \
-            -filter=tests/azure/config_subscription_with_providers.tftest.hcl \
-            -filter=tests/azure/resource_group.tftest.hcl \
-            -filter=tests/azure/storage_account.tftest.hcl \
-            -filter=tests/azure/ref_resolution.tftest.hcl
+          # Auto-discover non-config tests in tests/azure/ (resource/integration apply tests)
+          filters=()
+          for f in tests/azure/*.tftest.hcl; do
+            [[ "$(basename "$f")" != config_* ]] && [ -f "$f" ] && filters+=("-filter=$f")
+          done
+          if [ ${#filters[@]} -gt 0 ]; then
+            terraform test -test-directory=tests/azure "${filters[@]}"
+          else
+            echo "No apply tests found in tests/azure/"
+          fi
 
       - name: Run tests with credentials (tests/)
         env:
@@ -162,22 +258,28 @@ jobs:
           TF_VAR_azure_access_token: ${{ steps.token.outputs.access_token }}
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          terraform test \
-            -filter=tests/unit_azure_app_service_domain.tftest.hcl \
-            -filter=tests/unit_azure_communication_service.tftest.hcl \
-            -filter=tests/unit_azure_dns_zone.tftest.hcl \
-            -filter=tests/unit_azure_email_communication_service.tftest.hcl \
-            -filter=tests/unit_azure_ipam_pool.tftest.hcl \
-            -filter=tests/unit_azure_ipam_static_cidr.tftest.hcl \
-            -filter=tests/unit_azure_network_manager.tftest.hcl \
-            -filter=tests/integration_azure_app_service_domain.tftest.hcl \
-            -filter=tests/integration_azure_billing_associated_tenant.tftest.hcl \
-            -filter=tests/integration_azure_communication_service.tftest.hcl \
-            -filter=tests/integration_azure_dns_zone.tftest.hcl \
-            -filter=tests/integration_azure_email_communication_service.tftest.hcl \
-            -filter=tests/integration_azure_ipam_pool.tftest.hcl \
-            -filter=tests/integration_azure_ipam_static_cidr.tftest.hcl \
-            -filter=tests/integration_azure_network_manager.tftest.hcl \
-            -filter=tests/integration_config_aks_regulated.tftest.hcl
+          # Auto-discover all Azure unit + integration tests (require real credentials)
+          filters=()
+          for f in tests/unit_azure_*.tftest.hcl tests/integration_azure_*.tftest.hcl; do
+            [ -f "$f" ] && filters+=("-filter=$f")
+          done
+          if [ ${#filters[@]} -gt 0 ]; then
+            terraform test "${filters[@]}"
+          else
+            echo "No credential-requiring tests found"
+          fi
 
-
+      - name: Plan all configuration YAMLs (with live token)
+        env:
+          TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          # Live token resolves externals blocks — plan ALL configs including those
+          # skipped by the plan-config matrix job.
+          failed=0
+          for config in configurations/*.yaml; do
+            echo "=== Plan: $config ==="
+            TF_VAR_config_file="$config" terraform plan -input=false -no-color \
+              || { echo "FAILED: $config"; failed=$((failed + 1)); }
+          done
+          [ "$failed" -eq 0 ] || { echo "$failed configuration(s) failed to plan"; exit 1; }

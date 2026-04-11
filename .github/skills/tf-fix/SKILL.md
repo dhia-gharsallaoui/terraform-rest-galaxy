@@ -119,6 +119,8 @@ For every configuration YAML that corresponds to the module under audit (or for 
 | **`terraform_backend` present** | File contains a `terraform_backend:` block immediately after the header comment |
 | **`type: local` for local execution** | Default type is `local` with `path: <scenario_name>.tfstate` unless a remote backend has been deliberately configured |
 | **Key uniqueness** | `path` / `key` value is unique — no two configs share the same state file path |
+| **`subscription_id` non-null** | Any config deploying Azure resources must supply `subscription_id` — either inline in YAML or relying on `TF_VAR_subscription_id`. Configs that omit it entirely will fail at plan time with `var.subscription_id is null` |
+| **CI marker consistency** | If the config uses `externals:` (live ARM lookups) or `check_existance: true` (plan-time GETs), the `# ci:requires-live-token` marker must be present in the header comment. Configs missing this marker will fail in the plan-only CI matrix with 401/403 errors. See `configurations/README.md` Rule 2b |
 
 #### 2c. Examples (`examples/azure/<name>/minimum/` and `examples/azure/<name>/complete/`)
 
@@ -205,6 +207,12 @@ For each gap identified, apply the fix following the conventions in the agent sp
     ```
     Use `<scenario_name>` = filename without extension. Confirm the path is unique across all configurations.
 12. **Missing `force_new_attrs`** → For immutable properties (spec `x-ms-mutability: ["create", "read"]` or 400 `*UpdateNotPermitted`), add `force_new_attrs = toset(["properties.<field>"])`. See [Pattern #19](../../patterns/rest-provider-patterns.md#19-force_new_attrs--immutable-body-properties).
+13. **Missing `# ci:requires-live-token` marker** → If the config uses `externals:` OR contains resources with `check_existance: true` (plan-time GETs that fail with 401 on a placeholder token), add the marker to the header comment:
+    ```yaml
+    # ci:requires-live-token
+    # (check_existance: true causes plan-time GET calls that fail with a placeholder token)
+    ```
+    This prevents the config from being included in the plan-only matrix job. See `configurations/README.md` Rule 2b.
 
 After each fix, run `terraform fmt -recursive` on affected directories.
 
@@ -311,6 +319,7 @@ These are recurring issues discovered during development of this repo:
 | K8s namespace label drift | 3 namespaces show "will be updated" on every plan (removing `kubernetes.io/metadata.name` label) | Include auto-injected label in body: `merge({"kubernetes.io/metadata.name" = var.name}, var.labels)` — see [Pattern #16](../../patterns/rest-provider-patterns.md#16-kubernetes-server-side-mutations--preventing-body-drift) |
 | K8s destroy 403 `system:anonymous` | `ephemeral_header` not available during Delete — K8s resources can't authenticate for deletion | Switch to `header` (not `ephemeral_header`) + track token expiry to prevent drift — see [Pattern #14](../../patterns/rest-provider-patterns.md#14-ephemeral_header--not-available-during-delete) and [Pattern #17](../../patterns/rest-provider-patterns.md#17-token-expiry-tracking--preventing-auth-header-drift) |
 | Missing `terraform_backend` in config YAML | `terraform init` prompts for backend or defaults to a shared local path; no state isolation between configs | Add `terraform_backend: type: local` block after the header comment — see fix #11 above |
+| Import config fails in plan-only CI | `401/403` on plan-time GET from `check_existance: true`; plan-config matrix job fails | Add `# ci:requires-live-token` to header comment — see fix #13 above |
 | Immutable property update rejected | `400 RoleAssignmentUpdateNotPermitted` or `400 *CannotBeChanged` on apply after a property value change | Add `force_new_attrs = toset(["properties.<field>"])` to the `rest_resource` block — see [Pattern #19](../../patterns/rest-provider-patterns.md#19-force_new_attrs--immutable-body-properties) |
 | Concurrent write 409 on apply | `409 Concurrent*` when creating multiple child resources on the same parent (e.g. FICs on a UAI) | Configure `client.retry` with 409 in `status_codes` on the provider block — see [Pattern #20](../../patterns/rest-provider-patterns.md#20-provider-level-retry-for-transient-errors) |
 

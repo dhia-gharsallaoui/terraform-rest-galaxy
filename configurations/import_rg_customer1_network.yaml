@@ -2,6 +2,9 @@
 # Source: resource group 'rg-customer1-network'
 # Date: 2025-07-17
 #
+# ci:requires-live-token
+# (check_existance: true causes plan-time GET calls that fail with a placeholder token)
+#
 # Review this file carefully before importing.
 # Every attribute is set to match the deployed ARM state exactly.
 # Run: TF_VAR_config_file=configurations/import_rg_customer1_network.yaml terraform plan

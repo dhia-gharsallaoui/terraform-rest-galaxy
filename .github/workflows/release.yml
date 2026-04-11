@@ -69,6 +69,70 @@ jobs:
               (cd "$dir" && terraform init -backend=false && terraform validate) || exit 1
           done
 
+  # ── Discover plan-safe config YAMLs for matrix ──────────────────────────────
+  generate-config-matrix:
+    name: "Discover config matrix"
+    runs-on: ubuntu-latest
+    needs: validate-release
+    outputs:
+      configs: ${{ steps.list.outputs.configs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+
+      - name: List plan-safe configs
+        id: list
+        run: |
+          # Exclude configs that require a live ARM token:
+          #   - top-level externals: blocks (live ARM API calls at plan time)
+          #   - # ci:requires-live-token marker (e.g. import configs with check_existance)
+          # Output basenames without .yaml for clean matrix job names.
+          configs=$(grep -rL "^externals:" configurations/*.yaml \
+            | xargs grep -rL "^# ci:requires-live-token" \
+            | sort \
+            | xargs -I{} basename {} .yaml \
+            | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "configs=$configs" >> "$GITHUB_OUTPUT"
+          echo "Discovered $(echo "$configs" | jq -r 'length') plan-safe configs"
+
+  # ── Plan each configuration YAML (matrix) ───────────────────────────────────
+  # Uses the published provider from the Terraform registry (no source build needed).
+  # Each config gets its own runner → individual pass/fail visible in the release checks.
+  plan-config:
+    name: "Plan ${{ matrix.config }}"
+    needs: [validate-release, generate-config-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.generate-config-matrix.outputs.configs) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          rm -f .terraform.lock.hcl
+          terraform init -backend=false
+
+      - name: Plan configurations/${{ matrix.config }}.yaml
+        env:
+          TF_VAR_access_token: "placeholder"
+          TF_VAR_config_file: "configurations/${{ matrix.config }}.yaml"
+          # Placeholder subscription_id for configs that don't embed one in their YAML
+          TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
+        run: terraform plan -input=false -no-color
+
   # ── Run plan-only tests ────────────────────────────────────────────────────
   tests:
     name: "Run tests"
@@ -91,22 +155,51 @@ jobs:
           rm -f .terraform.lock.hcl
           terraform init -backend=false
 
-      - name: Run plan-only tests
+      - name: Run plan-only config tests (tests/azure)
         env:
           TF_VAR_access_token: "placeholder"
         run: |
-          terraform test \
-            -test-directory=tests/azure \
-            -filter=tests/azure/config_storage_account_cmk.tftest.hcl \
-            -filter=tests/azure/config_vwan_secure_hub_routing_intent.tftest.hcl \
-            -filter=tests/azure/config_acme_github_runners.tftest.hcl \
-            || { echo "Tests failed"; exit 1; }
+          # Auto-discover all config_*.tftest.hcl files in tests/azure/
+          filters=()
+          for f in tests/azure/config_*.tftest.hcl; do
+            [ -f "$f" ] && filters+=("-filter=$f")
+          done
+          if [ ${#filters[@]} -gt 0 ]; then
+            terraform test -test-directory=tests/azure "${filters[@]}"
+          else
+            echo "No config tests found in tests/azure/"
+          fi
+
+      - name: Run plan-only tests (tests/)
+        env:
+          TF_VAR_access_token: "placeholder"
+          TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
+        run: |
+          # GitHub unit tests — always plan-safe (no Azure provider_check)
+          filters=()
+          for f in tests/unit_github_*.tftest.hcl; do
+            [ -f "$f" ] && filters+=("-filter=$f")
+          done
+          # integration_config_* tests — only include those whose corresponding
+          # configurations/<name>.yaml exists and has no externals block.
+          for f in tests/integration_config_*.tftest.hcl; do
+            name=$(basename "$f" .tftest.hcl | sed 's/^integration_config_//')
+            yaml="configurations/${name}.yaml"
+            if [ -f "$yaml" ] && ! grep -q "^externals:" "$yaml"; then
+              filters+=("-filter=$f")
+            fi
+          done
+          if [ ${#filters[@]} -gt 0 ]; then
+            terraform test "${filters[@]}"
+          else
+            echo "No plan-only tests found"
+          fi
 
   # ── Create release ─────────────────────────────────────────────────────────
   release:
     name: "Create release"
     runs-on: ubuntu-latest
-    needs: [validate-release, validate, tests]
+    needs: [validate-release, validate, plan-config, tests]
     permissions:
       contents: write
     steps:
