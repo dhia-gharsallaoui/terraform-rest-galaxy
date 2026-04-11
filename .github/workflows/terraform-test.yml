@@ -76,80 +76,85 @@ jobs:
           echo "configs=$configs" >> "$GITHUB_OUTPUT"
           echo "Discovered $(echo "$configs" | jq -r 'length') plan-safe configs"
 
-  # ── Plan-only tests — no Azure credentials needed ──────────────────────────
-  plan-tests:
-    name: "Plan-only tests"
-    needs: build-provider
+  # ── Discover test files for plan-test and apply-test matrices ───────────────
+  generate-test-matrix:
+    name: "Discover test matrix"
     runs-on: ubuntu-latest
+    outputs:
+      plan_tests: ${{ steps.list.outputs.plan_tests }}
+      apply_tests: ${{ steps.list.outputs.apply_tests }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Download provider artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: terraform-provider-rest
-          path: ~/.terraform.d/plugins/
-
-      - name: Install provider from artifact
-        run: .github/scripts/restore-provider.sh
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Terraform Init
+      - name: List test files
+        id: list
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
+          plan_tests='[]'
+          apply_tests='[]'
 
-      - name: Run plan-only config tests (tests/azure)
-        env:
-          TF_VAR_access_token: "placeholder"
-        run: |
-          # Auto-discover all config_*.tftest.hcl files in tests/azure/
-          filters=()
+          # ── Plan-safe: tests/azure/config_* ────────────────────────────────
           for f in tests/azure/config_*.tftest.hcl; do
-            [ -f "$f" ] && filters+=("-filter=$f")
+            [ -f "$f" ] || continue
+            name=$(basename "$f" .tftest.hcl)
+            entry=$(jq -n --arg n "$name" --arg f "$f" --arg d "tests/azure" \
+              '{"name":$n,"file":$f,"dir":$d}')
+            plan_tests=$(echo "$plan_tests" | jq --argjson e "$entry" '. + [$e]')
           done
-          if [ ${#filters[@]} -gt 0 ]; then
-            terraform test -test-directory=tests/azure "${filters[@]}"
-          else
-            echo "No config tests found in tests/azure/"
-          fi
 
-      - name: Run plan-only tests (tests/)
-        env:
-          TF_VAR_access_token: "placeholder"
-          TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
-        run: |
-          # GitHub unit tests — always plan-safe (no Azure provider_check)
-          filters=()
+          # ── Plan-safe: tests/unit_github_* ─────────────────────────────────
           for f in tests/unit_github_*.tftest.hcl; do
-            [ -f "$f" ] && filters+=("-filter=$f")
+            [ -f "$f" ] || continue
+            name=$(basename "$f" .tftest.hcl)
+            entry=$(jq -n --arg n "$name" --arg f "$f" --arg d "." \
+              '{"name":$n,"file":$f,"dir":$d}')
+            plan_tests=$(echo "$plan_tests" | jq --argjson e "$entry" '. + [$e]')
           done
-          # integration_config_* tests — only include those whose corresponding
-          # configurations/<name>.yaml exists and has no externals block.
-          # (externals require live ARM API calls and fail with a placeholder token)
+
+          # ── Plan-safe: tests/integration_config_* (no externals, no ci:requires-live-token)
           for f in tests/integration_config_*.tftest.hcl; do
-            name=$(basename "$f" .tftest.hcl | sed 's/^integration_config_//')
-            yaml="configurations/${name}.yaml"
-            if [ -f "$yaml" ] && ! grep -q "^externals:" "$yaml"; then
-              filters+=("-filter=$f")
+            [ -f "$f" ] || continue
+            cfg_name=$(basename "$f" .tftest.hcl | sed 's/^integration_config_//')
+            yaml="configurations/${cfg_name}.yaml"
+            if [ -f "$yaml" ] \
+              && ! grep -q "^externals:" "$yaml" \
+              && ! grep -q "^# ci:requires-live-token" "$yaml"; then
+              name=$(basename "$f" .tftest.hcl)
+              entry=$(jq -n --arg n "$name" --arg f "$f" --arg d "." \
+                '{"name":$n,"file":$f,"dir":$d}')
+              plan_tests=$(echo "$plan_tests" | jq --argjson e "$entry" '. + [$e]')
             fi
           done
-          if [ ${#filters[@]} -gt 0 ]; then
-            terraform test "${filters[@]}"
-          else
-            echo "No plan-only tests found"
-          fi
+
+          # ── Apply: tests/azure/ non-config (resource/integration apply tests)
+          for f in tests/azure/*.tftest.hcl; do
+            [ -f "$f" ] || continue
+            [[ "$(basename "$f")" == config_* ]] && continue
+            name=$(basename "$f" .tftest.hcl)
+            entry=$(jq -n --arg n "$name" --arg f "$f" --arg d "tests/azure" \
+              '{"name":$n,"file":$f,"dir":$d}')
+            apply_tests=$(echo "$apply_tests" | jq --argjson e "$entry" '. + [$e]')
+          done
+
+          # ── Apply: tests/unit_azure_* + tests/integration_azure_* (skip ci:skip)
+          for f in tests/unit_azure_*.tftest.hcl tests/integration_azure_*.tftest.hcl; do
+            [ -f "$f" ] || continue
+            grep -q "^# ci:skip" "$f" && continue
+            name=$(basename "$f" .tftest.hcl)
+            entry=$(jq -n --arg n "$name" --arg f "$f" --arg d "." \
+              '{"name":$n,"file":$f,"dir":$d}')
+            apply_tests=$(echo "$apply_tests" | jq --argjson e "$entry" '. + [$e]')
+          done
+
+          echo "plan_tests=$(echo "$plan_tests" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          echo "apply_tests=$(echo "$apply_tests" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          echo "Discovered $(echo "$plan_tests" | jq 'length') plan tests"
+          echo "Discovered $(echo "$apply_tests" | jq 'length') apply tests"
 
   # ── Plan each configuration YAML (matrix) ───────────────────────────────────
   # Each config gets its own runner → individual pass/fail in the GitHub UI.
   # Configs with externals blocks are skipped here (need live ARM token);
-  # they are validated in the apply-tests job on push to main.
+  # they are validated in the plan-all-configs job on push to main.
   plan-config:
     name: "Plan ${{ matrix.config }}"
     needs: [build-provider, generate-config-matrix]
@@ -188,12 +193,174 @@ jobs:
           TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
         run: terraform plan -input=false -no-color
 
-  # ── Apply tests — require Azure credentials ────────────────────────────────
-  apply-tests:
-    name: "Apply tests"
+  # ── Plan each test file (matrix) ────────────────────────────────────────────
+  # No Azure credentials needed — placeholder token.
+  # Each test file gets its own runner → individual pass/fail in the GitHub UI.
+  plan-test:
+    name: "Test ${{ matrix.test.name }}"
+    needs: [build-provider, generate-test-matrix]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJson(needs.generate-test-matrix.outputs.plan_tests) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download provider artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
+
+      - name: Install provider from artifact
+        run: .github/scripts/restore-provider.sh
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          rm -f .terraform.lock.hcl
+          terraform init -backend=false
+
+      - name: Test ${{ matrix.test.name }}
+        env:
+          TF_VAR_access_token: "placeholder"
+          TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
+        run: |
+          if [ "${{ matrix.test.dir }}" = "tests/azure" ]; then
+            terraform test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
+          else
+            terraform test -filter="${{ matrix.test.file }}"
+          fi
+
+  # ── Register Azure providers — runs once before the apply-test matrix ───────
+  # Idempotent: re-registers providers that tests depend on (e.g. CognitiveServices).
+  # Separate job so every apply-test matrix entry doesn't repeat the apply.
+  register-providers:
+    name: "Register Azure providers"
     needs: build-provider
     runs-on: ubuntu-latest
-    # Only run on push to main (skip in PRs / forks / act local runs)
+    if: github.event_name != 'pull_request'
+    permissions:
+      id-token: write   # OIDC
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download provider artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
+
+      - name: Install provider from artifact
+        run: .github/scripts/restore-provider.sh
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Acquire Azure token
+        id: token
+        run: |
+          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Apply provider registrations
+        env:
+          TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: ./tf.sh apply configurations/ci_test_providers.yaml
+
+  # ── Apply each test file (matrix) ───────────────────────────────────────────
+  # Requires Azure credentials — runs only on push to main.
+  # Each test file gets its own runner → individual pass/fail in the GitHub UI.
+  apply-test:
+    name: "Test ${{ matrix.test.name }}"
+    needs: [build-provider, generate-test-matrix, register-providers]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJson(needs.generate-test-matrix.outputs.apply_tests) }}
+    permissions:
+      id-token: write   # OIDC
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download provider artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: terraform-provider-rest
+          path: ~/.terraform.d/plugins/
+
+      - name: Install provider from artifact
+        run: .github/scripts/restore-provider.sh
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          rm -f .terraform.lock.hcl
+          terraform init -backend=false
+
+      - name: Acquire Azure token
+        id: token
+        run: |
+          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Test ${{ matrix.test.name }}
+        env:
+          TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
+          TF_VAR_azure_access_token: ${{ steps.token.outputs.access_token }}
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          if [ "${{ matrix.test.dir }}" = "tests/azure" ]; then
+            terraform test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
+          else
+            terraform test -filter="${{ matrix.test.file }}"
+          fi
+
+  # ── Plan all configs with live token ────────────────────────────────────────
+  # Validates externals + ci:requires-live-token configs skipped by plan-config.
+  # Runs only on push to main.
+  plan-all-configs:
+    name: "Plan all configs (live token)"
+    needs: build-provider
+    runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     permissions:
       id-token: write   # OIDC
@@ -236,51 +403,7 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Register Azure resource providers required by tests
-        env:
-          TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          # Apply provider registrations via Terraform (consistent with how the repo
-          # manages all Azure resources). Registers Microsoft.CognitiveServices needed
-          # by foundry_account + foundry_deployment tests.
-          ./tf.sh apply configurations/ci_test_providers.yaml
-
-      - name: Run apply tests (tests/azure)
-        env:
-          TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          # Auto-discover non-config tests in tests/azure/ (resource/integration apply tests)
-          filters=()
-          for f in tests/azure/*.tftest.hcl; do
-            [[ "$(basename "$f")" != config_* ]] && [ -f "$f" ] && filters+=("-filter=$f")
-          done
-          if [ ${#filters[@]} -gt 0 ]; then
-            terraform test -test-directory=tests/azure "${filters[@]}"
-          else
-            echo "No apply tests found in tests/azure/"
-          fi
-
-      - name: Run tests with credentials (tests/)
-        env:
-          TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
-          TF_VAR_azure_access_token: ${{ steps.token.outputs.access_token }}
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          # Auto-discover all Azure unit + integration tests (require real credentials).
-          # Skip tests marked with '# ci:skip' (e.g. require partnership Azure providers).
-          filters=()
-          for f in tests/unit_azure_*.tftest.hcl tests/integration_azure_*.tftest.hcl; do
-            [ -f "$f" ] && ! grep -q "^# ci:skip" "$f" && filters+=("-filter=$f")
-          done
-          if [ ${#filters[@]} -gt 0 ]; then
-            terraform test "${filters[@]}"
-          else
-            echo "No credential-requiring tests found"
-          fi
-
-      - name: Plan all configuration YAMLs (with live token)
+      - name: Plan all configuration YAMLs
         env:
           TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
