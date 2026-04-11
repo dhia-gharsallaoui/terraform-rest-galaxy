@@ -76,7 +76,5 @@ module "azure_billing_permission_requests" {
   status                          = try(each.value.status, "Approved")
 
   # Cross-tenant: approval runs in the appropriate tenant
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

@@ -119,9 +119,8 @@ variable "cluster_node_architecture" {
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
-variable "header" {
-  type        = map(string)
-  default     = {}
-  sensitive   = true
-  description = "Optional HTTP headers to override (e.g. cross-tenant Authorization)."
+variable "auth_ref" {
+  type        = string
+  default     = null
+  description = "Reference to a named_auth entry in the provider for cross-tenant auth."
 }

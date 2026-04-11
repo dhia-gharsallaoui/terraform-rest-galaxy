@@ -47,7 +47,5 @@ module "azure_management_locks" {
   lock_level          = try(each.value.lock_level, "CanNotDelete")
   notes               = try(each.value.notes, null)
 
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

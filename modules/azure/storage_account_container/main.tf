@@ -18,7 +18,7 @@ locals {
 resource "rest_resource" "container" {
   path             = local.container_path
   create_method    = "PUT"
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]

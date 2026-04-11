@@ -43,7 +43,5 @@ module "azure_storage_account_containers" {
   container_name      = each.value.container_name
   public_access       = try(each.value.public_access, "None")
 
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

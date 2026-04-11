@@ -98,7 +98,5 @@ module "azure_arc_kubernetes_extensions" {
   plan                             = try(each.value.plan, null)
   cluster_node_architecture        = try(data.rest_resource.arc_ext_cluster_nodes[each.value.cluster_name].output.items[0].metadata.labels["kubernetes.io/arch"], null)
 
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

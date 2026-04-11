@@ -32,9 +32,25 @@ variable "arm_tenant_tokens" {
   default     = {}
   description = <<-EOT
     Map of tenant_id → ARM bearer token for cross-tenant access.
-    When an externals entry includes _tenant, the matching token is used.
+    Used by validate_externals / ref-resolver for cross-tenant lookups.
     Example:
       export TF_VAR_arm_tenant_tokens='{"4fcc1d67-...": "'$(az account get-access-token --resource https://management.azure.com --tenant 4fcc1d67-... --query accessToken -o tsv)'" }'
+  EOT
+}
+
+variable "named_auth" {
+  type        = any
+  sensitive   = true
+  default     = {}
+  description = <<-EOT
+    Named authentication configurations for cross-tenant access.
+    Each entry creates an independent HTTP client with its own OAuth2 transport.
+    Resources reference entries via auth_ref = "<key>".
+    Keys are tenant IDs; values follow the provider security schema.
+    Example:
+      named_auth = {
+        "4f8f6e1e-..." = { oauth2 = { refresh_token = { token_url = "...", refresh_token = "...", client_id = "...", scopes = ["..."] } } }
+      }
   EOT
 }
 

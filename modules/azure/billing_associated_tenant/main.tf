@@ -23,7 +23,7 @@ resource "rest_operation" "check_access" {
   count            = var.precheck_access ? 1 : 0
   path             = "/providers/Microsoft.Billing/billingAccounts/${var.billing_account_name}/checkAccess"
   method           = "POST"
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -58,7 +58,7 @@ resource "rest_resource" "billing_associated_tenant" {
   path             = local.path
   create_method    = "PUT"
   check_existance  = var.check_existance
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]

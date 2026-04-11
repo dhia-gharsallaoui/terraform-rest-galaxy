@@ -56,7 +56,7 @@ resource "rest_resource" "ea_role_assignment" {
   path             = "${local.scope}/billingRoleAssignments/${random_uuid.role_assignment_name.result}"
   create_method    = "PUT"
   check_existance  = var.check_existance
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -86,7 +86,7 @@ resource "rest_resource" "mca_role_assignment" {
   path             = "${local.scope}/createBillingRoleAssignment"
   create_method    = "POST"
   read_path        = "$unescape(body.id)" # Server-generated; unescape prevents %2F encoding
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -130,7 +130,7 @@ resource "rest_operation" "mca_invoice_section_role_request" {
 
   path             = "${local.scope}/createBillingRoleAssignment"
   method           = "POST"
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]

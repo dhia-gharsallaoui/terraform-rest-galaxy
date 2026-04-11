@@ -66,9 +66,7 @@ module "azure_billing_role_assignments" {
   check_existance      = var.check_existance
 
   # Cross-tenant: if _tenant is set, override the Authorization header
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }
 
 # ── Scope owner discovery (root level to avoid module depends_on deferral) ───
@@ -86,9 +84,7 @@ data "rest_resource" "billing_scope_owners" {
     "/providers/Microsoft.Billing/billingAccounts/${each.value.billing_account_name}"
   )}/billingRoleAssignments"
 
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 
   query = {
     api-version = ["2024-04-01"]

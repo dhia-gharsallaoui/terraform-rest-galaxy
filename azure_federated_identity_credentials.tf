@@ -39,7 +39,5 @@ module "azure_federated_identity_credentials" {
   check_existance           = var.check_existance
 
   # Cross-tenant: if _tenant is set, override the Authorization header
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

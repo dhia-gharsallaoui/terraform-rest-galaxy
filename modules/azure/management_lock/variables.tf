@@ -30,8 +30,8 @@ variable "notes" {
   description = "Notes about the lock (max 512 characters)."
 }
 
-variable "header" {
-  type        = map(string)
-  default     = {}
-  description = "Optional HTTP header overrides (e.g. cross-tenant Authorization)."
+variable "auth_ref" {
+  type        = string
+  default     = null
+  description = "Reference to a named_auth entry in the provider for cross-tenant auth."
 }

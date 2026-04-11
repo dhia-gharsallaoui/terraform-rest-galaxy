@@ -50,7 +50,5 @@ module "azure_resource_provider_registrations" {
   resource_provider_namespace = each.value.resource_provider_namespace
 
   # Cross-tenant: if _tenant is set, override the Authorization header
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

@@ -18,7 +18,7 @@ resource "rest_resource" "user_assigned_identity" {
   path             = local.uai_path
   create_method    = "PUT"
   check_existance  = var.check_existance
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]

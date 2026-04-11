@@ -71,11 +71,10 @@ variable "tags" {
 
 # ── Provider behaviour ─────────────────────────────────────────────────────
 
-variable "header" {
-  type        = map(string)
-  default     = {}
-  sensitive   = true
-  description = "Optional HTTP headers to override for this resource (e.g. cross-tenant Authorization)."
+variable "auth_ref" {
+  type        = string
+  default     = null
+  description = "Reference to a named_auth entry in the provider for cross-tenant auth."
 }
 
 variable "check_existance" {

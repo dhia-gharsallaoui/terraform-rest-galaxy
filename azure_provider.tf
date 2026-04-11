@@ -23,6 +23,8 @@ provider "rest" {
     Authorization = "Bearer ${var.azure_access_token}"
   } : {}
 
+  named_auth = var.named_auth
+
   client = {
     retry = {
       status_codes    = [409, 429, 500, 502, 503]

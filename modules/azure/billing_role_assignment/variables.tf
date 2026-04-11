@@ -6,10 +6,10 @@ variable "check_existance" {
   description = "Check whether the role assignment already exists before creating it."
 }
 
-variable "header" {
-  type        = map(string)
-  default     = {}
-  description = "Optional HTTP headers applied to each request. Use to override Authorization for cross-tenant scenarios."
+variable "auth_ref" {
+  type        = string
+  default     = null
+  description = "Reference to a named_auth entry in the provider for cross-tenant auth."
 }
 
 # ── Required ──────────────────────────────────────────────────────────────────

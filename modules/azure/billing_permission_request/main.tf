@@ -32,7 +32,7 @@ resource "rest_resource" "billing_permission_request" {
   path             = local.path
   create_method    = "PUT"
   delete_method    = "PUT"
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]
@@ -78,7 +78,7 @@ resource "rest_resource" "billing_request_approval" {
   path             = "/providers/Microsoft.Billing/billingRequests/${var.billing_request_id}"
   create_method    = "PUT"
   delete_method    = "PUT"
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = ["2024-04-01"]

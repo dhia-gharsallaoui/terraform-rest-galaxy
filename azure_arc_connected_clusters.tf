@@ -87,7 +87,5 @@ module "azure_arc_connected_clusters" {
   tags                           = try(each.value.tags, null)
   wait_for_connection            = try(each.value.wait_for_connection, true)
 
-  header = try(each.value._tenant, null) != null ? {
-    Authorization = "Bearer ${var.arm_tenant_tokens[each.value._tenant]}"
-  } : {}
+  auth_ref = try(each.value._tenant, null)
 }

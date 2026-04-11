@@ -58,7 +58,7 @@ resource "rest_resource" "connected_cluster" {
   create_method    = "PUT"
   update_method    = "PUT"
   check_existance  = var.check_existance
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]

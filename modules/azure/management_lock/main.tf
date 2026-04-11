@@ -19,7 +19,7 @@ locals {
 resource "rest_resource" "management_lock" {
   path             = local.lock_path
   create_method    = "PUT"
-  ephemeral_header = var.header
+  auth_ref         = var.auth_ref
 
   query = {
     api-version = [local.api_version]
