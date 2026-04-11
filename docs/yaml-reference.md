@@ -15,7 +15,7 @@ location:           ref:azure_resource_groups.app.location
 ## Providers
 
 
-### [Azure](yaml-reference-azure.md) — 60 resources
+### [Azure](yaml-reference-azure.md) — 71 resources
 
   - [`azure_app_service_domains`](yaml-reference-azure.md#azure-app-service-domains)
   - [`azure_arc_connected_clusters`](yaml-reference-azure.md#azure-arc-connected-clusters)
@@ -65,7 +65,18 @@ location:           ref:azure_resource_groups.app.location
   - [`azure_role_assignments_post`](yaml-reference-azure.md#azure-role-assignments-post)
   - [`azure_route_tables`](yaml-reference-azure.md#azure-route-tables)
   - [`azure_routing_intents`](yaml-reference-azure.md#azure-routing-intents)
+  - [`azure_storage_account_blob_services`](yaml-reference-azure.md#azure-storage-account-blob-services)
+  - [`azure_storage_account_blobs`](yaml-reference-azure.md#azure-storage-account-blobs)
   - [`azure_storage_account_containers`](yaml-reference-azure.md#azure-storage-account-containers)
+  - [`azure_storage_account_encryption_scopes`](yaml-reference-azure.md#azure-storage-account-encryption-scopes)
+  - [`azure_storage_account_file_services`](yaml-reference-azure.md#azure-storage-account-file-services)
+  - [`azure_storage_account_file_shares`](yaml-reference-azure.md#azure-storage-account-file-shares)
+  - [`azure_storage_account_inventory_policies`](yaml-reference-azure.md#azure-storage-account-inventory-policies)
+  - [`azure_storage_account_local_users`](yaml-reference-azure.md#azure-storage-account-local-users)
+  - [`azure_storage_account_management_policies`](yaml-reference-azure.md#azure-storage-account-management-policies)
+  - [`azure_storage_account_object_replication_policies`](yaml-reference-azure.md#azure-storage-account-object-replication-policies)
+  - [`azure_storage_account_queues`](yaml-reference-azure.md#azure-storage-account-queues)
+  - [`azure_storage_account_tables`](yaml-reference-azure.md#azure-storage-account-tables)
   - [`azure_storage_accounts`](yaml-reference-azure.md#azure-storage-accounts)
   - [`azure_subscriptions`](yaml-reference-azure.md#azure-subscriptions)
   - [`azure_user_assigned_identities`](yaml-reference-azure.md#azure-user-assigned-identities)
