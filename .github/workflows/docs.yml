@@ -4,10 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "azure_*.tf"
-      - "entraid_*.tf"
-      - "github_*.tf"
-      - "k8s_*.tf"
+      - "galaxy/**/*.tf"
       - "scripts/generate-docs.py"
       - "modules/**/*.tf"
       - ".terraform-docs.yml"
@@ -30,6 +27,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
 
       - name: Generate docs/yaml-reference.md
         run: python3 scripts/generate-docs.py

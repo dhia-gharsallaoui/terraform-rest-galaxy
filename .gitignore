@@ -11,7 +11,10 @@ __pycache__/
 *.bak
 *.tmp
 
-# Terraform
+# Terraform (generated build directory)
+.build/
+
+# Terraform runtime artifacts
 .terraform/
 backend.tf
 *.tfstate

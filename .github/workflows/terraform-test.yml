@@ -13,6 +13,17 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ── Validate galaxy/ build (no duplicates, no missing files) ───────────────
+  galaxy-check:
+    name: "Galaxy build check"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate galaxy/ structure
+        run: scripts/build-galaxy.sh --check
+
   # ── Build rest provider from source — shared by all jobs ───────────────────
   build-provider:
     name: "Build rest provider"
@@ -200,16 +211,18 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Init
-        run: terraform init -backend=false
+        run: terraform -chdir=.build init -backend=false
 
       - name: Plan configurations/${{ matrix.config }}.yaml
         env:
           TF_VAR_access_token: "placeholder"
           TF_VAR_config_file: "configurations/${{ matrix.config }}.yaml"
-          # Placeholder subscription_id for configs that don't embed one in their YAML
           TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
-        run: terraform plan -input=false -no-color
+        run: terraform -chdir=.build plan -input=false -no-color
 
   # ── Plan each test file (matrix) ────────────────────────────────────────────
   # No Azure credentials needed — placeholder token.
@@ -241,10 +254,13 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Init
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
+          rm -f .build/.terraform.lock.hcl
+          terraform -chdir=.build init -backend=false
 
       - name: Test ${{ matrix.test.name }}
         env:
@@ -252,9 +268,9 @@ jobs:
           TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
         run: |
           if [ "${{ matrix.test.dir }}" = "tests/azure" ]; then
-            terraform test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
+            terraform -chdir=.build test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
           else
-            terraform test -filter="${{ matrix.test.file }}"
+            terraform -chdir=.build test -filter="${{ matrix.test.file }}"
           fi
 
   # ── Apply each test file (matrix) ───────────────────────────────────────────
@@ -298,10 +314,13 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Init
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
+          rm -f .build/.terraform.lock.hcl
+          terraform -chdir=.build init -backend=false
 
       - name: Acquire Azure token
         id: token
@@ -317,9 +336,9 @@ jobs:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
           if [ "${{ matrix.test.dir }}" = "tests/azure" ]; then
-            terraform test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
+            terraform -chdir=.build test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
           else
-            terraform test -filter="${{ matrix.test.file }}"
+            terraform -chdir=.build test -filter="${{ matrix.test.file }}"
           fi
 
   # ── Plan live-token configs (matrix) ────────────────────────────────────────
@@ -364,10 +383,13 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Init
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
+          rm -f .build/.terraform.lock.hcl
+          terraform -chdir=.build init -backend=false
 
       - name: Acquire Azure token
         id: token
@@ -381,4 +403,4 @@ jobs:
           TF_VAR_access_token: ${{ steps.token.outputs.access_token }}
           TF_VAR_config_file: "configurations/${{ matrix.config }}.yaml"
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: terraform plan -input=false -no-color
+        run: terraform -chdir=.build plan -input=false -no-color

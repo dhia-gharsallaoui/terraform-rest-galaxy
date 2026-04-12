@@ -131,7 +131,7 @@ jobs:
       - name: Verify module repo contents
         run: |
           [ -f ./tf.sh ] || { echo "✗ tf.sh not found"; exit 1; }
-          [ -f ./backend.tf ] || { echo "✗ backend.tf not found"; exit 1; }
+          [ -d ./galaxy ] || { echo "✗ galaxy/ not found"; exit 1; }
           [ -d ./modules ] || { echo "✗ modules/ not found"; exit 1; }
           echo "✓ Module repo structure valid"
 
@@ -263,9 +263,12 @@ jobs:
           
           echo "✓ Tokens acquired"
 
-      # ── Terraform Validate ────────────────────────────────────────────────
+      # ── Build galaxy + Terraform Validate ──────────────────────────────
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Validate
-        run: terraform validate
+        run: terraform -chdir=.build validate
         env:
           TF_VAR_azure_access_token: "placeholder"  # Not needed for validate
 

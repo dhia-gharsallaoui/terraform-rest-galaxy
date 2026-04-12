@@ -16,20 +16,21 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
+BUILD_DIR = REPO_ROOT / ".build"
 DOCS_DIR = REPO_ROOT / "docs"
 
 # Files to skip within each provider glob (non-resource files)
 SKIP_SUFFIXES = {
-    "_variables.tf", "_outputs.tf", "_layers.tf",
-    "_provider.tf", "_versions.tf",
+    "__variables.tf", "__outputs.tf", "__layers.tf",
+    "__provider.tf", "__versions.tf",
 }
 
 # Provider groups: (heading, slug, file glob, extra skips)
 PROVIDERS = [
-    ("Azure", "azure", "azure_*.tf", set()),
-    ("Entra ID", "entraid", "entraid_*.tf", set()),
-    ("GitHub", "github", "github_*.tf", set()),
-    ("Kubernetes", "k8s", "k8s_*.tf", set()),
+    ("Azure", "azure", "azure__*.tf", set()),
+    ("Entra ID", "entraid", "entraid__*.tf", set()),
+    ("GitHub", "github", "github__*.tf", set()),
+    ("Kubernetes", "k8s", "k8s__*.tf", set()),
 ]
 
 
@@ -435,8 +436,13 @@ location:           ref:azure_resource_groups.app.location
 
     total_resources = 0
 
+    # The flat .tf files live in .build/ (assembled by scripts/build-galaxy.sh).
+    if not BUILD_DIR.is_dir():
+        print(f"ERROR: {BUILD_DIR} does not exist. Run scripts/build-galaxy.sh first.", file=sys.stderr)
+        sys.exit(1)
+
     for heading, slug, glob_pattern, extra_skip in PROVIDERS:
-        files = sorted(REPO_ROOT.glob(glob_pattern))
+        files = sorted(BUILD_DIR.glob(glob_pattern))
         resource_files = [
             f for f in files
             if not any(str(f).endswith(s) for s in SKIP_SUFFIXES | extra_skip)

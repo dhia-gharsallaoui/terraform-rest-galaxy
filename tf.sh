@@ -45,7 +45,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_TF="$REPO_ROOT/backend.tf"
+TF_ROOT="$REPO_ROOT/.build"
+BACKEND_TF="$TF_ROOT/backend.tf"
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -314,7 +315,7 @@ acquire_tokens() {
 # up when the kind cluster containers are deleted.
 _remove_k8s_from_state() {
   local state_list
-  state_list="$(terraform -chdir="$REPO_ROOT" state list 2>/dev/null)" || true
+  state_list="$(terraform -chdir="$TF_ROOT" state list 2>/dev/null)" || true
   local found=false
   for pattern in "module\\.helm_releases\\." "module\\.k8s_namespaces\\." "module\\.k8s_cluster_role_bindings\\." "module\\.k8s_deployments\\." "module\\.k8s_config_maps\\." "module\\.k8s_service_accounts\\." "ref_token\\."; do
     local resources
@@ -323,7 +324,7 @@ _remove_k8s_from_state() {
       found=true
       while IFS= read -r addr; do
         warn "  Removing from state: $addr"
-        terraform -chdir="$REPO_ROOT" state rm "$addr" >/dev/null 2>&1 || true
+        terraform -chdir="$TF_ROOT" state rm "$addr" >/dev/null 2>&1 || true
       done <<< "$resources"
     fi
   done
@@ -557,12 +558,13 @@ do_init() {
     local)
       local state_path
       state_path="$(json_field "$backend_json" path ".tfstate/terraform.tfstate")"
-      # Ensure directory exists
+      # Ensure directory exists — state lives relative to REPO_ROOT, not .build/
       mkdir -p "$(dirname "$REPO_ROOT/$state_path")"
+      local abs_state_path="$REPO_ROOT/$state_path"
       write_backend_tf "local"
       info "Running terraform init (local backend)..."
-      terraform -chdir="$REPO_ROOT" init -reconfigure \
-        -backend-config="path=$state_path"
+      terraform -chdir="$TF_ROOT" init -reconfigure \
+        -backend-config="path=$abs_state_path"
       ;;
     azurerm)
       local rg sa container key use_azuread
@@ -573,7 +575,7 @@ do_init() {
       use_azuread="$(json_field "$backend_json" use_azuread_auth true)"
       write_backend_tf "azurerm"
       info "Running terraform init (azurerm backend)..."
-      terraform -chdir="$REPO_ROOT" init -reconfigure \
+      terraform -chdir="$TF_ROOT" init -reconfigure \
         -backend-config="resource_group_name=$rg" \
         -backend-config="storage_account_name=$sa" \
         -backend-config="container_name=$container" \
@@ -995,6 +997,10 @@ USAGE
   shift 2
   local -a extra_args=("$@")
 
+  # Build flat Terraform root from galaxy/ source
+  info "Assembling .build/ from galaxy/ ..."
+  "$REPO_ROOT/scripts/build-galaxy.sh"
+
   # Init
   do_init "$backend_json"
 
@@ -1009,12 +1015,12 @@ USAGE
     plan)
       info "Running terraform plan..."
       # shellcheck disable=SC2086
-      terraform -chdir="$REPO_ROOT" plan $var_flags "${extra_args[@]+"${extra_args[@]}"}"
+      terraform -chdir="$TF_ROOT" plan $var_flags "${extra_args[@]+"${extra_args[@]}"}"
       ;;
     apply)
       info "Running terraform apply..."
       # shellcheck disable=SC2086
-      terraform -chdir="$REPO_ROOT" apply $var_flags "${extra_args[@]+"${extra_args[@]}"}"
+      terraform -chdir="$TF_ROOT" apply $var_flags "${extra_args[@]+"${extra_args[@]}"}"
 
       # Bootstrap special: upload state after successful apply
       if [[ "$backend_type" == "local" ]]; then
@@ -1039,11 +1045,11 @@ USAGE
 
       info "Running terraform destroy..."
       # shellcheck disable=SC2086
-      terraform -chdir="$REPO_ROOT" destroy $var_flags "${extra_args[@]+"${extra_args[@]}"}"
+      terraform -chdir="$TF_ROOT" destroy $var_flags "${extra_args[@]+"${extra_args[@]}"}"
       ;;
     output)
       info "Running terraform output..."
-      terraform -chdir="$REPO_ROOT" output "${extra_args[@]+"${extra_args[@]}"}"
+      terraform -chdir="$TF_ROOT" output "${extra_args[@]+"${extra_args[@]}"}"
       ;;
     force-unlock)
       if [[ "$backend_type" == "azurerm" ]]; then
@@ -1067,7 +1073,7 @@ USAGE
     import)
       info "Running terraform import..."
       # shellcheck disable=SC2086
-      terraform -chdir="$REPO_ROOT" import $var_flags "${extra_args[@]+"${extra_args[@]}"}"
+      terraform -chdir="$TF_ROOT" import $var_flags "${extra_args[@]+"${extra_args[@]}"}"
       ;;
     *)
       die "Unknown action: $action (expected: init|plan|apply|destroy|output|force-unlock|import|vars|status)"

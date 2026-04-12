@@ -109,11 +109,12 @@ location:           ref:azure_resource_groups.app.location
   - [`github_repository_secrets`](yaml-reference-github.md#github-repository-secrets)
   - [`github_runner_groups`](yaml-reference-github.md#github-runner-groups)
 
-### [Kubernetes](yaml-reference-k8s.md) — 7 resources
+### [Kubernetes](yaml-reference-k8s.md) — 8 resources
 
   - [`k8s_cluster_role_bindings`](yaml-reference-k8s.md#k8s-cluster-role-bindings)
   - [`k8s_config_maps`](yaml-reference-k8s.md#k8s-config-maps)
   - [`k8s_deployments`](yaml-reference-k8s.md#k8s-deployments)
+  - [`helm_releases`](yaml-reference-k8s.md#helm-releases)
   - [`k8s_jobs`](yaml-reference-k8s.md#k8s-jobs)
   - [`k8s_kind_clusters`](yaml-reference-k8s.md#k8s-kind-clusters)
   - [`k8s_namespaces`](yaml-reference-k8s.md#k8s-namespaces)
