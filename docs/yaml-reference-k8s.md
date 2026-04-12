@@ -102,6 +102,51 @@ k8s_deployments:
 
 ---
 
+### `helm_releases`
+
+Map of Helm releases to install on Kubernetes clusters.
+The 'cluster' field references a k8s_kind_clusters key name to determine
+which kube context to use (derived as "kind-<cluster_name>").
+
+#### Attributes
+
+| Name | Type | Required | Default | Description |
+|------|------|:--------:|---------|-------------|
+| `cluster` | `string` | yes | — |  |
+| `name` | `string` | yes | — |  |
+| `namespace` | `string` | no | `"default"` |  |
+| `chart` | `string` | yes | — |  |
+| `repository` | `string` | no | `null` |  |
+| `chart_version` | `string` | no | `null` |  |
+| `values` | `string` | no | `null` |  |
+| `set` | `map(string)` | no | `{}` |  |
+| `set_sensitive` | `map(string)` | no | `{}` |  |
+| `kubeconfig_path` | `string` | no | `null` |  |
+| `kube_context` | `string` | no | `null` |  |
+| `create_namespace` | `bool` | no | `true` |  |
+| `wait` | `bool` | no | `true` |  |
+| `timeout` | `number` | no | `600` |  |
+| `insecure_skip_tls_verify` | `bool` | no | `false` |  |
+| `_tls_key_refs` | `map(string)` | no | `{}` |  |
+
+#### YAML Example
+
+```yaml
+helm_releases:
+  arc_agent_platform:
+    cluster: "ref:k8s_kind_clusters.platform.name"
+    name: "azure-arc"
+    namespace: "azure-arc"
+    chart: "azure-arc"
+    repository: "https://azurearcfork8s.azurecr.io/helm/v1/repo"
+    set:
+      "global.subscriptionId": "00000000-..."
+      "global.resourceGroupName": "rg-arc"
+      "global.clusterName": "platform-cluster"
+```
+
+---
+
 ### `k8s_jobs`
 
 **API version:** `Kubernetes Batch API v1`

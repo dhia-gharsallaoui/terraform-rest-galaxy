@@ -6,16 +6,34 @@ The repo was originally scaffolded with a full GitHub Copilot workspace (agents,
 
 ## Layout
 
+- `galaxy/` — **organized root module source** (the Terraform orchestration layer)
+  - `galaxy/azure/{core,platform,networking,dns,ipam,connectivity,storage,security,compute,database,communication,ai,billing,identity}/` — Azure resources by domain
+  - `galaxy/entraid/` — Entra ID resources (`_meta/` for provider/layers/outputs)
+  - `galaxy/github/` — GitHub resources (`_meta/` for provider config)
+  - `galaxy/k8s/` — Kubernetes resources (`_meta/` for provider/layers/outputs)
+  - `galaxy/shared/` — cross-provider files (variables, backend safety, remote state)
+- `.build/` — **generated flat Terraform root** (gitignored, created by `scripts/build-galaxy.sh`)
 - `modules/{azure,entraid,github,k8s}/<name>/` — versioned sub-modules
-- `azure_*.tf`, `entraid_*.tf`, `github_*.tf`, `k8s_*.tf` — root wiring (`for_each` over YAML config)
 - `configurations/*.yaml` — per-deployment configs (resources, refs, optional `terraform_backend`)
 - `examples/<provider>/<module>/{minimum,complete}/` — example usages used by tests
 - `tests/` — `terraform test` files (symlinks into categorised subdirs; see testing instructions)
+- `scripts/build-galaxy.sh` — assembles `.build/` from `galaxy/` (auto-derives flat filenames)
 - `.github/` — canonical Copilot knowledge base (agents, skills, prompts, instructions, patterns, MCP servers)
 - `.claude/` — Claude Code adapter (skills, subagents, slash commands) that delegate into `.github/`
 - `memories/repo/` — durable repo facts (codebase facts, test conventions)
 - `specs/` — vendored REST API spec repos (shallow submodules, consumed by the `*-specs` MCP servers)
 - `providers/terraform-provider-rest/` — vendored **writable** copy of the `LaurentLesle/rest` provider source (shallow submodule). Use this to reproduce provider bugs, prototype fixes, and contribute PRs upstream without leaving the repo.
+
+### Galaxy build step
+
+Terraform requires all `.tf` files in one flat directory. The `galaxy/` directory organizes source files by provider and domain. Before any `terraform` command, run:
+
+```bash
+scripts/build-galaxy.sh        # generates .build/ with flat files
+terraform -chdir=.build plan   # run terraform from .build/
+```
+
+`tf.sh` runs the build step automatically. To add a new resource file, place it in the right `galaxy/` subdirectory — the naming convention `<provider>_<filename>` is derived automatically (files in `galaxy/shared/` keep their name as-is).
 
 ## How Claude Code uses the Copilot assets
 

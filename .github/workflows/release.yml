@@ -2,6 +2,8 @@ name: Release (Semver)
 
 # ── Release workflow triggered by semver tags ───────────────────────────────
 # Trigger: Push tag matching v*.*.* (e.g., v1.0.0, v1.2.3)
+# Tags should be created by the "Prepare Release" workflow, which builds
+# flat .tf files at root for Terraform registry consumers.
 
 on:
   push:
@@ -52,15 +54,28 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Verify flat root files (registry consumers need these)
+        run: |
+          if ! compgen -G "azure_*.tf" > /dev/null 2>&1; then
+            echo "::error::No flat .tf files at repository root."
+            echo "::error::Use the 'Prepare Release' workflow (Actions → Prepare Release → Run) to create releases."
+            echo "::error::Direct tag pushes are no longer supported — the tag must include built Terraform files."
+            exit 1
+          fi
+          echo "Flat .tf files found at root ($(ls -1 azure_*.tf | wc -l) azure files)"
+
       - name: Terraform format check
         run: terraform fmt -check -recursive .
         continue-on-error: true
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform validate (root)
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
-          terraform validate
+          rm -f .build/.terraform.lock.hcl
+          terraform -chdir=.build init -backend=false
+          terraform -chdir=.build validate
 
   # ── Discover example dirs for matrix ─────────────────────────────────────
   generate-examples-matrix:
@@ -160,17 +175,20 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Init
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
+          rm -f .build/.terraform.lock.hcl
+          terraform -chdir=.build init -backend=false
 
       - name: Plan configurations/${{ matrix.config }}.yaml
         env:
           TF_VAR_access_token: "placeholder"
           TF_VAR_config_file: "configurations/${{ matrix.config }}.yaml"
           TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
-        run: terraform plan -input=false -no-color
+        run: terraform -chdir=.build plan -input=false -no-color
 
   # ── Discover test files for plan-test matrix ──────────────────────────────
   generate-test-matrix:
@@ -248,10 +266,13 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
+
       - name: Terraform Init
         run: |
-          rm -f .terraform.lock.hcl
-          terraform init -backend=false
+          rm -f .build/.terraform.lock.hcl
+          terraform -chdir=.build init -backend=false
 
       - name: Test ${{ matrix.test.name }}
         env:
@@ -259,15 +280,17 @@ jobs:
           TF_VAR_subscription_id: "00000000-0000-0000-0000-000000000000"
         run: |
           if [ "${{ matrix.test.dir }}" = "tests/azure" ]; then
-            terraform test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
+            terraform -chdir=.build test -test-directory=tests/azure -filter="${{ matrix.test.file }}"
           else
-            terraform test -filter="${{ matrix.test.file }}"
+            terraform -chdir=.build test -filter="${{ matrix.test.file }}"
           fi
 
   # ── Regenerate docs before publishing ────────────────────────────────────
   # Runs generate-docs.py and terraform-docs so the release snapshot always
   # has up-to-date YAML reference and module READMEs, even if the docs workflow
   # hadn't committed yet when the tag was pushed.
+  # Checks out main (not the tag) so the release commit's flat root .tf files
+  # don't leak to main.
   regenerate-docs:
     name: "Regenerate docs"
     runs-on: ubuntu-latest
@@ -275,16 +298,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.ref }}
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Build galaxy
+        run: scripts/build-galaxy.sh
 
       - name: Generate YAML reference docs
         run: python3 scripts/generate-docs.py
@@ -299,6 +325,8 @@ jobs:
           git-push: "false"
 
       - name: Commit and push docs if changed
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -306,8 +334,8 @@ jobs:
           if git diff --staged --quiet; then
             echo "No documentation changes."
           else
-            git commit -m "docs: regenerate yaml-reference and module READMEs for ${{ github.ref_name }} [skip ci]"
-            git push origin HEAD:main
+            git commit -m "docs: regenerate yaml-reference and module READMEs for ${TAG_NAME} [skip ci]"
+            git push origin main
           fi
 
   # ── Create release ─────────────────────────────────────────────────────────
